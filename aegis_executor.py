@@ -146,13 +146,25 @@ def run_daily_execution():
     mt_buy = current_price * 0.85; mt_sell = current_price * 1.45
     lt_buy = current_price * 0.70; lt_sell_final = 5.89
 
+    # 경보 로직 추가
+    warning_msg = "🟢 시장 안정"
+    if ls_ratio > 2.5:
+        warning_msg = "🔴 롱 스퀴즈 경보 (Long Squeeze)"
+    elif ls_ratio < 0.5:
+        warning_msg = "🔴 숏 스퀴즈 경보 (Short Squeeze)"
+    if abs(funding_rate) > 0.05:
+        warning_msg += " / 🟠 펀딩비 과열"
+
     code_analysis = f"""[🎯 타점 분석 (Timeframe Zone)]
 ⚡ 단기 (1~2주): 매수 ${st_buy:.2f} / 매도 ${st_sell:.2f}
 🌊 중기 (1~3개월): 매집 ${mt_buy:.2f} / 익절 ${mt_sell:.2f}
 🌌 장기 (6개월+): 최후선 ${lt_buy:.2f} / 목표 ${lt_sell_final}
 
 [🤖 DNN & 선물 지표]
-- 확률: {prob_percent:.2f}% / 롱숏: {ls_ratio:.2f} / 펀딩: {funding_rate:.4f}%"""
+- 확률: {prob_percent:.2f}% / 롱숏: {ls_ratio:.2f} / 펀딩: {funding_rate:.4f}%
+
+[⚠️ 시장 경보]
+{warning_msg}"""
 
     analysis_data = {
         'price': current_price, 'prob': prob_percent, 'funding_rate': funding_rate, 
