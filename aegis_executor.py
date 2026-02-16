@@ -7,7 +7,12 @@ import torch.nn as nn
 from sklearn.preprocessing import StandardScaler
 import os
 import warnings
-import google.generativeai as genai
+try:
+    import google.generativeai as genai
+    HAS_GEMINI = True
+except ImportError:
+    HAS_GEMINI = False
+    genai = None
 
 warnings.filterwarnings('ignore')
 
@@ -23,10 +28,12 @@ def load_api_key():
     return os.getenv("GEMINI_API_KEY")
 
 GEMINI_API_KEY = load_api_key()
-if GEMINI_API_KEY:
+if HAS_GEMINI and GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY)
-else:
+elif HAS_GEMINI and not GEMINI_API_KEY:
     print("⚠️ 경고: API 키를 찾을 수 없습니다. .env 파일을 확인하세요.")
+elif not HAS_GEMINI:
+    print("⚠️ 경고: google.generativeai 모듈이 설치되지 않았습니다. AI 분석 기능이 제한됩니다.")
 
 class AegisDNN(nn.Module):
     def __init__(self, input_size):
@@ -56,6 +63,8 @@ def calculate_rsi(data, window=14):
     return 100 - (100 / (1 + rs))
 
 def get_gemini_insight(data_dict):
+    if not HAS_GEMINI:
+        return "[🧠 AI 직관] Google Generative AI 모듈 미설치로 분석 불가."
     try:
         model = genai.GenerativeModel('gemini-2.5-flash')
         prompt = f"""
@@ -114,8 +123,10 @@ def run_daily_execution():
     ml_df['XRP_Return_1d'] = df['XRP'].pct_change()
     ml_df['XRP_Vol_1d'] = ml_df['XRP_Return_1d'].abs()
     ml_df['Ret_Week'] = df['XRP'].pct_change(7); ml_df['Ret_Month'] = df['XRP'].pct_change(30)
-    ml_df['Ret_6Month'] = df['XRP'].pct_change(180); ml_df['Ret_Year'] = df['XRP'].pct_change(365)
+    ml_df['Ret_3Month'] = df['XRP'].pct_change(90); ml_df['Ret_6Month'] = df['XRP'].pct_change(180)
+    ml_df['Ret_Year'] = df['XRP'].pct_change(365)
     ml_df['MA7'] = df['XRP'].rolling(7).mean(); ml_df['MA30'] = df['XRP'].rolling(30).mean()
+    ml_df['MA90'] = df['XRP'].rolling(90).mean(); ml_df['MA180'] = df['XRP'].rolling(180).mean()
     ml_df['MA200'] = df['XRP'].rolling(200).mean(); ml_df['XRP_RSI_14'] = calculate_rsi(df['XRP'])
     ml_df['DXY_Return_1d'] = df['DXY'].pct_change(); ml_df['NASDAQ_Return_1d'] = df['NASDAQ'].pct_change()
 
@@ -124,7 +135,10 @@ def run_daily_execution():
     ma200 = latest_data['MA200'].values[0]
     rsi_val = latest_data['XRP_RSI_14'].values[0]
 
-    base_df = pd.read_csv(os.path.expanduser("~/Desktop/xrp_research/ml_ready_data.csv"), index_col='Date', parse_dates=True)
+    data_path = os.path.expanduser("~/Desktop/xrp_research/ml_ready_data.csv")
+    if not os.path.exists(data_path):
+        data_path = "ml_ready_data.csv"
+    base_df = pd.read_csv(data_path, index_col='Date', parse_dates=True)
     features = base_df.drop(columns=['Target_Buy_Signal', 'Future_XRP_3d'], errors='ignore')
     
     scaler = StandardScaler()
@@ -133,8 +147,10 @@ def run_daily_execution():
 
     device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
     model_path = os.path.expanduser("~/Desktop/xrp_research/aegis_brain.pth")
+    if not os.path.exists(model_path):
+        model_path = "aegis_brain.pth"
     model = AegisDNN(input_size=X_live_scaled.shape[1]).to(device)
-    model.load_state_dict(torch.load(model_path))
+    model.load_state_dict(torch.load(model_path, map_location=device))
     model.eval()
 
     with torch.no_grad():
@@ -181,4 +197,5 @@ def run_daily_execution():
     }
 
 if __name__ == "__main__":
-    run_daily_execution()
+    result = run_daily_execution()
+    print("\n" + result['commentary'])
