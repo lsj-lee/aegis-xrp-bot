@@ -8,27 +8,48 @@ def run_pipeline():
     start_time = time.time()
     now_str = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
+    # 1. 경로 자동 인식: 절대 경로 설정
+    PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
+
+    # 2. 실행 엔진 설정: 가상환경 파이썬 경로 고정
+    PYTHON_EXEC = os.path.join(PROJECT_DIR, ".venv", "bin", "python")
+
     print(f"\n☀️ [AEGIS 3.0 일간 통합 파이프라인 가동] - {now_str}")
+    print(f"📁 프로젝트 경로: {PROJECT_DIR}")
+    print(f"🐍 파이썬 실행기: {PYTHON_EXEC}")
     print("="*65)
 
-    # 🚀 실행할 파이썬 파일들을 순서대로 리스트업 (함수 이름 몰라도 무조건 실행됨)
+    # 3. 파일명 매칭: 실제 파일명 파이프라인 구성
     steps = [
-        ("[STEP 1] 최신 데이터 뱅크 업데이트 중...", "data_bank_builder.py"),
-        ("[STEP 2] 데이터 전처리 및 라벨링 중...", "data_preprocessor.py"),
-        ("[STEP 3] MPS 가속 기반 딥러닝 뇌 재설계 중...", "aegis_dnn_trainer.py"),
-        ("[STEP 4] 완성된 뇌를 통한 오늘의 확률 진단 중...", "aegis_executor.py"),
-        ("[STEP 5] 구글 시트(Cloud)에 분석 리포트 전송 중...", "aegis_automation.py")
+        ("data_bank_builder.py", "[STEP 1] 최신 데이터 뱅크 업데이트 중..."),
+        ("data_preprocessor.py", "[STEP 2] 데이터 전처리 및 라벨링 중..."),
+        ("aegis_dnn_trainer.py", "[STEP 3] MPS 가속 기반 딥러닝 뇌 재설계 중..."),
+        ("aegis_executor.py", "[STEP 4] 완성된 뇌를 통한 오늘의 확률 진단 중...")
     ]
 
-    for step_msg, script_file in steps:
+    # 4. 실행 방식: subprocess.run + 절대 경로 + cwd 설정
+    for script_file, step_msg in steps:
         print(f"\n{step_msg}")
         
-        # 터미널에서 직접 실행하는 것과 완전히 동일한 방식 (독립 프로세스 실행)
-        result = subprocess.run([sys.executable, script_file])
+        script_path = os.path.join(PROJECT_DIR, script_file)
         
-        # 만약 중간에 에러가 나면 다음 단계로 넘어가지 않고 즉시 중단
-        if result.returncode != 0:
-            print(f"⚠️ {script_file} 내부에서 치명적 오류가 발생하여 시스템을 긴급 정지합니다.")
+        # 파일 존재 여부 확인
+        if not os.path.exists(script_path):
+            print(f"⚠️ 오류: {script_path} 파일을 찾을 수 없습니다.")
+            return
+
+        try:
+            # subprocess.run 사용, cwd=PROJECT_DIR 로 설정하여 상대 경로 문제 해결
+            result = subprocess.run([PYTHON_EXEC, script_path], cwd=PROJECT_DIR)
+
+            if result.returncode != 0:
+                print(f"⚠️ {script_file} 실행 중 오류 발생 (Exit Code: {result.returncode})")
+                return # 중단
+        except FileNotFoundError:
+            print(f"⚠️ 실행 실패: {PYTHON_EXEC}을(를) 찾을 수 없습니다. 가상환경이 설정되어 있는지 확인하세요.")
+            return
+        except Exception as e:
+            print(f"⚠️ 예기치 못한 오류 발생: {e}")
             return
 
     end_time = time.time()
