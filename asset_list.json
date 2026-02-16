@@ -1,0 +1,15 @@
+{
+    "base_assets": {
+        "XRP": "XRP-USD",
+        "BTC": "BTC-USD",
+        "ETH": "ETH-USD"
+    },
+    "macro_indicators": {
+        "DXY": "DX-Y.NYB",
+        "GOLD": "GC=F",
+        "COPPER": "HG=F",
+        "NASDAQ": "^IXIC",
+        "SILVER": "SLV",
+        "TSLA": "TSLA"
+    }
+}

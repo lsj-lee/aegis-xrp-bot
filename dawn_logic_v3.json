@@ -1,0 +1,25 @@
+{
+    "symbolic_targets": {
+        "matrix_589_pivot": 5.89,
+        "xrp_357_week_convergence_peak": "2026-05-15",
+        "clarity_act_final_deadline": "2026-03-01"
+    },
+    "deep_filters": {
+        "fear_index_floor": 5,
+        "alt_season_index_trigger": 43,
+        "usdt_dominance_ceiling": 4.5
+    },
+    "institutional_pivot_signals": {
+        "mirae_asset_korbit_takeover": "completed_92_percent",
+        "x_platform_trading_launch": "pending_2026",
+        "samsung_2027_profit_forecast": 170000000000000
+    },
+    "historical_fractal": {
+        "1929_dow_jones_mirror": true,
+        "2027_great_reset_warning": 0.99,
+        "2026_burst_up_window": "Q1_Q4"
+    },
+    "correlation_pairs": [
+        "XRP/TSLA", "XRP/SLV", "XRP/GLD", "XRP/BTC", "XRP/ETH", "ETH/BTC", "HG1/GC1"
+    ]
+}
