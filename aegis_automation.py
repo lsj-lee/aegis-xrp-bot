@@ -41,6 +41,7 @@ def run_automated_pipeline():
     print(f"⏰ [AEGIS 3.0 자동화 파이프라인 가동] - {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     result = run_daily_execution()
     if result:
+        print("\n" + result['commentary'])
         update_google_sheet(result)
 
 if __name__ == "__main__":
