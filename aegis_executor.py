@@ -164,7 +164,8 @@ def run_daily_execution():
     
     return {
         'date': end_date, 'price': current_price, 'fng': current_fng,
-        'prob': prob_percent, 'decision': "분석 완료", 'commentary': f"{code_analysis}\n\n{gemini_analysis}"
+        'prob': prob_percent, 'decision': "분석 완료", 'long_term': analysis_data['long_term'],
+        'commentary': f"{code_analysis}\n\n{gemini_analysis}"
     }
 
 if __name__ == "__main__":
