@@ -3,8 +3,9 @@ import sys
 import time
 import datetime
 import subprocess
+import argparse
 
-def run_pipeline():
+def run_pipeline(auto_sleep=False):
     start_time = time.time()
     now_str = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
@@ -17,6 +18,7 @@ def run_pipeline():
     print(f"\n☀️ [AEGIS 3.0 일간 통합 파이프라인 가동] - {now_str}")
     print(f"📁 프로젝트 경로: {PROJECT_DIR}")
     print(f"🐍 파이썬 실행기: {PYTHON_EXEC}")
+    print(f"💤 자동 수면 모드: {'ON' if auto_sleep else 'OFF'}")
     print("="*65)
 
     # 3. 파일명 매칭: 실제 파일명 파이프라인 구성
@@ -60,10 +62,22 @@ def run_pipeline():
     print("🎯 이제 구글 시트에서 AI의 '오늘자 성적표'를 확인하세요.")
     print("=================================================================")
 
-    # 🌙 [자동 수면 모드] 완료 후 10초 대기 후 맥북 절전 모드 진입
-    print("\n🌙 임무를 완수했습니다. 10초 뒤 맥북을 절전 모드(Sleep)로 전환합니다...")
-    time.sleep(10)
-    os.system("pmset sleepnow") # 애플 실리콘 맥북 강제 절전 모드 명령어
+    if auto_sleep:
+        # 🌙 [자동 수면 모드] 완료 후 10초 대기 후 맥북 절전 모드 진입
+        print("\n🌙 임무를 완수했습니다. 10초 뒤 맥북을 절전 모드(Sleep)로 전환합니다...")
+        time.sleep(10)
+        os.system("pmset sleepnow") # 애플 실리콘 맥북 강제 절전 모드 명령어
+    else:
+        print("\n✨ 시스템이 종료되었습니다. (자동 수면 모드 미실행)")
 
 if __name__ == "__main__":
-    run_pipeline()
+    parser = argparse.ArgumentParser(description="AEGIS Main System Pipeline")
+    parser.add_argument("--auto", action="store_true", help="Automatically sleep after completion")
+    parser.add_argument("--sleep", action="store_true", help="Alias for --auto")
+
+    args = parser.parse_args()
+
+    # Enable sleep mode if either flag is present
+    should_sleep = args.auto or args.sleep
+
+    run_pipeline(auto_sleep=should_sleep)
