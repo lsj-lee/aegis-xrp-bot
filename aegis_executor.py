@@ -8,7 +8,7 @@ from sklearn.preprocessing import StandardScaler
 import os
 import warnings
 try:
-    import google.generativeai as genai
+    from google import genai
     HAS_GEMINI = True
 except ImportError:
     HAS_GEMINI = False
@@ -28,12 +28,17 @@ def load_api_key():
     return os.getenv("GEMINI_API_KEY")
 
 GEMINI_API_KEY = load_api_key()
+client = None
 if HAS_GEMINI and GEMINI_API_KEY:
-    genai.configure(api_key=GEMINI_API_KEY)
+    try:
+        client = genai.Client(api_key=GEMINI_API_KEY)
+    except Exception as e:
+        print(f"⚠️ Client 초기화 오류: {e}")
+        client = None
 elif HAS_GEMINI and not GEMINI_API_KEY:
     print("⚠️ 경고: API 키를 찾을 수 없습니다. .env 파일을 확인하세요.")
 elif not HAS_GEMINI:
-    print("⚠️ 경고: google.generativeai 모듈이 설치되지 않았습니다. AI 분석 기능이 제한됩니다.")
+    print("⚠️ 경고: google-genai 모듈이 설치되지 않았습니다. AI 분석 기능이 제한됩니다.")
 
 class AegisDNN(nn.Module):
     def __init__(self, input_size):
@@ -65,8 +70,9 @@ def calculate_rsi(data, window=14):
 def get_gemini_insight(data_dict):
     if not HAS_GEMINI:
         return "[🧠 AI 직관] Google Generative AI 모듈 미설치로 분석 불가."
+    if not client:
+        return "[🧠 AI 직관] Client 초기화 실패로 분석 불가."
     try:
-        model = genai.GenerativeModel('gemini-2.5-flash')
         prompt = f"""
         당신은 상위 1% 암호화폐 퀀트 애널리스트입니다.
         아래 데이터를 바탕으로 다음 세 가지 스케일(단/중/장기)에 맞춘 분석 리포트를 작성해주세요.
@@ -84,7 +90,8 @@ def get_gemini_insight(data_dict):
         - 현재가: ${data_dict['price']:.4f}, 확률: {data_dict['prob']:.2f}%
         - 펀딩비율: {data_dict['funding_rate']:.4f}%, 롱/숏 비율: {data_dict['ls_ratio']:.2f}
         """
-        return model.generate_content(prompt).text.strip()
+        response = client.models.generate_content(model='gemini-2.5-flash', contents=prompt)
+        return response.text.strip()
     except Exception as e:
         return f"[🧠 AI 직관] 연결 장애: {e}"
 
