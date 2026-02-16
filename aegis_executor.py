@@ -60,6 +60,17 @@ class AegisDNN(nn.Module):
         )
     def forward(self, x): return self.network(x)
 
+def get_upbit_krw_price():
+    try:
+        url = "https://api.upbit.com/v1/ticker?markets=KRW-XRP"
+        headers = {"User-Agent": "Mozilla/5.0"}
+        response = requests.get(url, headers=headers, timeout=5)
+        data = response.json()
+        return float(data[0]['trade_price'])
+    except Exception as e:
+        print(f"⚠️ Upbit 가격 조회 실패: {e}")
+        return None
+
 def calculate_rsi(data, window=14):
     delta = data.diff()
     gain = (delta.where(delta > 0, 0)).rolling(window=window).mean()
@@ -76,6 +87,11 @@ def get_gemini_insight(data_dict):
         prompt = f"""
         당신은 상위 1% 암호화폐 퀀트 애널리스트입니다.
         아래 데이터를 바탕으로 다음 세 가지 스케일(단/중/장기)에 맞춘 분석 리포트를 작성해주세요.
+
+        [작성 지침]
+        - 모든 달러($) 가격 언급 시, 반드시 원화(₩) 환산 가격을 함께 병기해주세요.
+        - 환율 기준: 1 XRP ($) = {data_dict['krw_usd_rate']:.2f} KRW (업비트 기준/김치프리미엄 포함)
+        - 예시: $1.50 (₩2,100)
 
         출력 형식:
         [🧠 타임프레임별 거시 분석 (Gemini)]
@@ -139,6 +155,14 @@ def run_daily_execution():
 
     latest_data = ml_df.dropna().iloc[-1:]
     current_price = latest_data['XRP'].values[0]
+
+    # 🇰🇷 [업비트 원화 가격 조회 및 김치프리미엄 반영 환율 계산]
+    upbit_price = get_upbit_krw_price()
+    if upbit_price and current_price > 0:
+        krw_usd_rate = upbit_price / current_price  # 실질 환율 (김프 포함)
+    else:
+        krw_usd_rate = usd_krw_rate  # 야후 파이낸스 환율 또는 기본값
+
     ma200 = latest_data['MA200'].values[0]
     rsi_val = latest_data['XRP_RSI_14'].values[0]
 
@@ -169,6 +193,11 @@ def run_daily_execution():
     mt_buy = current_price * 0.85; mt_sell = current_price * 1.45
     lt_buy = current_price * 0.70; lt_sell_final = 5.89
 
+    # 원화 환산 헬퍼 함수
+    def fmt_price(usd_price):
+        krw_price = usd_price * krw_usd_rate
+        return f"${usd_price:.2f} (₩{krw_price:,.0f})"
+
     # 경보 로직 추가
     warning_msg = "🟢 시장 안정"
     if ls_ratio > 2.5:
@@ -179,9 +208,9 @@ def run_daily_execution():
         warning_msg += " / 🟠 펀딩비 과열"
 
     code_analysis = f"""[🎯 타점 분석 (Timeframe Zone)]
-⚡ 단기 (1~2주): 매수 ${st_buy:.2f} / 매도 ${st_sell:.2f}
-🌊 중기 (1~3개월): 매집 ${mt_buy:.2f} / 익절 ${mt_sell:.2f}
-🌌 장기 (6개월+): 최후선 ${lt_buy:.2f} / 목표 ${lt_sell_final}
+⚡ 단기 (1~2주): 매수 {fmt_price(st_buy)} / 매도 {fmt_price(st_sell)}
+🌊 중기 (1~3개월): 매집 {fmt_price(mt_buy)} / 익절 {fmt_price(mt_sell)}
+🌌 장기 (6개월+): 최후선 {fmt_price(lt_buy)} / 목표 {fmt_price(lt_sell_final)}
 
 [🤖 DNN & 선물 지표]
 - 확률: {prob_percent:.2f}% / 롱숏: {ls_ratio:.2f} / 펀딩: {funding_rate:.4f}%
@@ -192,7 +221,7 @@ def run_daily_execution():
     analysis_data = {
         'price': current_price, 'prob': prob_percent, 'funding_rate': funding_rate, 
         'ls_ratio': ls_ratio, 'long_term': "상승" if current_price > ma200 else "하락",
-        'fng': current_fng, 'rsi': rsi_val
+        'fng': current_fng, 'rsi': rsi_val, 'krw_usd_rate': krw_usd_rate
     }
     
     gemini_analysis = get_gemini_insight(analysis_data)
