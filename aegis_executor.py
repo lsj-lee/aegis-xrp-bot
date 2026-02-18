@@ -162,15 +162,23 @@ def get_gemini_insight(data_dict, am):
 
         INSTRUCTIONS:
         1. **Analysis (NDA/TE):** Apply the formulas conceptually to the current market state.
-        2. **Contrarian Check:** If F&G < 20, emphasize the "Frog Strategy". If F&G > 80, warn of overheating.
-        3. **Synthesis:** Combine technicals, philosophy, and macro context (2026/2027) into a cohesive narrative.
+           - Explicitly mention "NDA" (Multi-Dimensional Analysis) and "TE" (Time Evolution) formulas.
+        2. **Evolution Research:** Analyze the DNN architecture and suggest technical improvements (Sliding Window, TFT/Transformer, Custom Loss).
+        3. **Contrarian Check:** If F&G < 20, emphasize the "Frog Strategy". If F&G > 80, warn of overheating.
+        4. **Synthesis:** Combine technicals, philosophy, and macro context (2026/2027) into a cohesive narrative.
 
         OUTPUT FORMAT (KOREAN ONLY, Use Emojis):
+        [🧠 AEGIS Chain-of-Thought]
+        - (Briefly explain the reasoning process behind the analysis)
+
         [🧠 AEGIS '어슴새벽' 인사이트]
-        1. 🌌 다차원 분석 (NDA/TE Model): (Apply formulas & philosophy)
+        1. 🌌 다차원 분석 (NDA/TE Model): (Apply formulas & philosophy explicitly)
         2. 🐸 청개구리 전략 및 리스크: (Sentiment analysis & Contrarian view)
 
-        [🔥 최종 대응 전략]
+        [🧬 Aegis Evolution Research]
+        - (Self-diagnosis of DNN & Technical suggestions: Sliding Window, TFT, Custom Loss)
+
+        [🔥 Final Action Plan]
         - 결론: (강력 매수 / 분할 매수 / 관망 / 매도)
         - 확신도: (높음 / 중간 / 낮음)
         - 실행 가이드: (Detailed advice in Korean, emphasizing ISO 20022 & Wealth Transfer)
@@ -272,30 +280,25 @@ def run_daily_execution():
     if not os.path.exists(model_path):
         model_path = "aegis_brain.pth"
 
-    # Model initialization logic with smart input resizing
+    # Model initialization logic with strict data alignment (Aegis 4.0 Standard)
     input_size = len(feature_columns)
-    model = None
+    model = AegisDNN(input_size=input_size).to(device)
 
     if os.path.exists(model_path):
         try:
             state_dict = torch.load(model_path, map_location=device)
-            # Detect input size from the first layer weights
-            if 'network.0.weight' in state_dict:
-                saved_input_size = state_dict['network.0.weight'].shape[1]
-                if saved_input_size != input_size:
-                    print(f"⚠️ 모델 차원 불일치 자동 조정: 데이터({input_size}) -> 모델({saved_input_size})")
-                    # Slice features to match model's expected input size
-                    X_live_scaled = X_live_scaled[:, :saved_input_size]
-                    input_size = saved_input_size
-
-            model = AegisDNN(input_size=input_size).to(device)
             model.load_state_dict(state_dict)
+        except RuntimeError as e:
+            if "size mismatch" in str(e):
+                print(f"⚠️ Model dimension mismatch (Data: {input_size}). Proceeding with fresh, untrained model for structure compatibility.")
+                # We already initialized the correct structure, just need to proceed without loading weights
+                pass
+            else:
+                print(f"⚠️ Model loading error: {e}. Proceeding with fresh model.")
         except Exception as e:
-            print(f"⚠️ 모델 로드 치명적 오류: {e}. (신규 모델 초기화 진행)")
-            model = AegisDNN(input_size=input_size).to(device)
+            print(f"⚠️ Critical Error loading model: {e}. Proceeding with fresh model.")
     else:
-        print("⚠️ 학습된 모델 없음: 신규 초기화")
-        model = AegisDNN(input_size=input_size).to(device)
+        print("⚠️ No trained model found. Initializing fresh model.")
 
     model.eval()
 
@@ -330,11 +333,7 @@ def run_daily_execution():
 - 확률: {prob_percent:.2f}% / 롱숏: {ls_ratio:.2f} / 펀딩: {funding_rate:.4f}%
 
 [⚠️ 시장 경보]
-{warning_msg}
-
-[🛡️ 포트폴리오 가이드]
-- 핵심 자산: XRP, XLM, HBAR (ISO 20022 & Clarity Act 수혜)
-- 원칙: 규제 불확실성 '잡코인' 배제, 금융 인프라 집중"""
+{warning_msg}"""
 
     analysis_data = {
         'price': current_price, 'prob': prob_percent, 'funding_rate': funding_rate, 
