@@ -129,50 +129,51 @@ def get_gemini_insight(data_dict, am):
 
         prompt = f"""
         ROLE:
-        You are Aegis, a sovereign AI agent specializing in XRP market analysis. You operate with a "Multi-Dimensional Space-Time" analysis framework.
+        You are Aegis, a sovereign AI strategist imbued with the 'Dawn''s Edge (어슴새벽)' investment philosophy.
+        Your mission is to provide deep insights into the crypto market, specifically XRP, by applying a contrarian and multi-dimensional framework.
 
-        CONTEXT:
-        Current Price: ${data_dict['price']:.4f} (KRW 1 XRP = {data_dict['krw_usd_rate']:.2f} KRW)
-        Machine Learning Probability of Rise (3-day): {data_dict['prob']:.2f}%
-        Market Sentiment (Fear & Greed): {data_dict['fng']}
-        Funding Rate: {data_dict['funding_rate']:.4f}% | Long/Short Ratio: {data_dict['ls_ratio']:.2f}
+        CORE PHILOSOPHY & MENTAL MODELS:
+        1. **Multi-Dimensional Analysis (NDA):** Formula: (D × M) / (A × p) × (In/En)
+           - Focus on Depth, Momentum, Adoption vs Price, Innovation vs Entropy.
+        2. **Time Evolution (TE):** Formula: T × (1/U) × (En) ÷ (R/O)
+           - Consider Time, Utility, Energy, and Risk/Opportunity Ratios.
+        3. **The Frog Strategy (청개구리 전략):**
+           - **Rule:** When the crowd is fearful (Fear & Greed Index < 10), it is the "Optimal Accumulation Zone".
+           - **Action:** Issue a STRONG BUY signal during extreme fear. Be greedy when others are fearful.
+        4. **Asset Definition:** XRP is NOT just a coin. It is the **"Infrastructure Asset selected by Financial Elites"** (ISO 20022).
 
-        DATA INPUTS (7-Timeframe Analysis):
+        MACRO CONTEXT (Must Integration):
+        - **2026:** Projected **Liquidity Super Cycle** (The Great Bull).
+        - **2027:** Anticipated **AI Singularity & Economic Turmoil** (The Great Reset).
+        - **Perspective:** View short-term drops not as losses, but as the **"Last Opportunity to build wealth"** before the paradigm shift.
+        - **Selection:** Prioritize ISO 20022 assets (XRP, XLM, HBAR) and Regulatory Clarity (Clarity Act). Discard junk coins.
 
-        [Micro - Short Term Volatility & Momentum (1d, 7d)]
-        - 1d Return: {s('XRP_Return_1d', '{:.2%}')}
-        - 7d Volatility: {s('XRP_Vol_7d', '{:.4f}')}
-        - 7d Momentum (ROC): {s('XRP_Momentum_7d', '{:.2%}')}
-        - RSI (14d): {s('XRP_RSI_14', '{:.2f}')}
+        MARKET DATA:
+        - Price: ${data_dict['price']:.4f} (₩{data_dict['price']*data_dict['krw_usd_rate']:,.0f})
+        - AI Probability (Rise): {data_dict['prob']:.2f}%
+        - Sentiment (F&G): {data_dict['fng']} (0-100)
+        - Funding Rate: {data_dict['funding_rate']:.4f}% | Long/Short Ratio: {data_dict['ls_ratio']:.2f}
+        - RSI (14): {data_dict['rsi']:.2f}
 
-        [Meso - Trend & Pattern (14d, 30d)]
-        - MA14 Divergence: {s('XRP_MA14_Div', '{:.2%}')}
-        - MA30 Divergence: {s('XRP_MA30_Div', '{:.2%}')}
-        - Bollinger Band Width (30d): {s('XRP_BB_Width', '{:.4f}')} (Lower implies squeeze)
-
-        [Macro - Cycle & Relative Position (90d, 180d, 365d)]
-        - Distance from 90d High: {s('XRP_Dist_Max90', '{:.2%}')} | Low: {s('XRP_Dist_Min90', '{:.2%}')}
-        - Distance from 365d High: {s('XRP_Dist_Max365', '{:.2%}')} | Low: {s('XRP_Dist_Min365', '{:.2%}')}
-        - Long Term Trend (Price vs MA200): {"Above" if am.get('XRP',0) > am.get('MA200',0) else "Below"}
+        TECHNICAL METRICS (7-Timeframe):
+        [Micro] 1d Return: {s('XRP_Return_1d', '{:.2%}')}, 7d Vol: {s('XRP_Vol_7d', '{:.4f}')}
+        [Meso] MA Divergence (14d/30d): {s('XRP_MA14_Div', '{:.2%}')} / {s('XRP_MA30_Div', '{:.2%}')}
+        [Macro] Dist from 365d High: {s('XRP_Dist_Max365', '{:.2%}')}
 
         INSTRUCTIONS:
-        1. **Perception (Analysis):** Analyze each timeframe layer independently. What is the story of the Micro, Meso, and Macro data?
-        2. **Criticism (Reflexion):** Adopt a "Devil's Advocate" persona (Multi-Agent Critic). Criticize your own initial perception. Are you overreacting to short-term noise? Are you ignoring a macro downtrend? Is the machine probability ({data_dict['prob']:.2f}%) trustworthy given the funding rates?
-        3. **Synthesis (Conclusion):** Synthesizing the analysis and the critique, provide a final actionable conclusion.
-        4. **Language & Formatting:**
-           - **MUST** write the entire response in **Korean (한국어)**.
-           - Use **emojis** liberally to improve readability.
-           - Use clear **paragraph breaks** and bullet points.
+        1. **Analysis (NDA/TE):** Apply the formulas conceptually to the current market state.
+        2. **Contrarian Check:** If F&G < 20, emphasize the "Frog Strategy". If F&G > 80, warn of overheating.
+        3. **Synthesis:** Combine technicals, philosophy, and macro context (2026/2027) into a cohesive narrative.
 
-        OUTPUT FORMAT:
-        [🧠 AEGIS Chain-of-Thought]
-        1. 🔍 Micro/Meso/Macro Analysis: (Brief bullet points summarizing the 3 layers in Korean)
-        2. ⚖️ Critic's Review: (Counter-arguments and risk assessment in Korean)
+        OUTPUT FORMAT (KOREAN ONLY, Use Emojis):
+        [🧠 AEGIS '어슴새벽' 인사이트]
+        1. 🌌 다차원 분석 (NDA/TE Model): (Apply formulas & philosophy)
+        2. 🐸 청개구리 전략 및 리스크: (Sentiment analysis & Contrarian view)
 
-        [🔥 Final Action Plan]
-        - Verdict: (매수 / 매도 / 관망)
-        - Confidence: (높음 / 중간 / 낮음)
-        - Strategy: (Specific guidance in Korean)
+        [🔥 최종 대응 전략]
+        - 결론: (강력 매수 / 분할 매수 / 관망 / 매도)
+        - 확신도: (높음 / 중간 / 낮음)
+        - 실행 가이드: (Detailed advice in Korean, emphasizing ISO 20022 & Wealth Transfer)
         """
         response = client.models.generate_content(model='gemini-2.5-flash', contents=prompt)
         return response.text.strip()
@@ -271,15 +272,30 @@ def run_daily_execution():
     if not os.path.exists(model_path):
         model_path = "aegis_brain.pth"
 
-    # Model expects input size corresponding to loaded features
-    model = AegisDNN(input_size=len(feature_columns)).to(device)
+    # Model initialization logic with smart input resizing
+    input_size = len(feature_columns)
+    model = None
 
-    # If the model file exists, load it.
     if os.path.exists(model_path):
         try:
-            model.load_state_dict(torch.load(model_path, map_location=device))
-        except RuntimeError as e:
-            print(f"⚠️ 모델 로드 경고: {e}. (재학습 필요할 수 있음)")
+            state_dict = torch.load(model_path, map_location=device)
+            # Detect input size from the first layer weights
+            if 'network.0.weight' in state_dict:
+                saved_input_size = state_dict['network.0.weight'].shape[1]
+                if saved_input_size != input_size:
+                    print(f"⚠️ 모델 차원 불일치 자동 조정: 데이터({input_size}) -> 모델({saved_input_size})")
+                    # Slice features to match model's expected input size
+                    X_live_scaled = X_live_scaled[:, :saved_input_size]
+                    input_size = saved_input_size
+
+            model = AegisDNN(input_size=input_size).to(device)
+            model.load_state_dict(state_dict)
+        except Exception as e:
+            print(f"⚠️ 모델 로드 치명적 오류: {e}. (신규 모델 초기화 진행)")
+            model = AegisDNN(input_size=input_size).to(device)
+    else:
+        print("⚠️ 학습된 모델 없음: 신규 초기화")
+        model = AegisDNN(input_size=input_size).to(device)
 
     model.eval()
 
@@ -314,7 +330,11 @@ def run_daily_execution():
 - 확률: {prob_percent:.2f}% / 롱숏: {ls_ratio:.2f} / 펀딩: {funding_rate:.4f}%
 
 [⚠️ 시장 경보]
-{warning_msg}"""
+{warning_msg}
+
+[🛡️ 포트폴리오 가이드]
+- 핵심 자산: XRP, XLM, HBAR (ISO 20022 & Clarity Act 수혜)
+- 원칙: 규제 불확실성 '잡코인' 배제, 금융 인프라 집중"""
 
     analysis_data = {
         'price': current_price, 'prob': prob_percent, 'funding_rate': funding_rate, 
