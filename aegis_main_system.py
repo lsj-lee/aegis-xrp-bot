@@ -25,7 +25,7 @@ def run_pipeline(auto_sleep=False):
     steps = [
         ("data_bank_builder.py", "[STEP 1] 최신 데이터 뱅크 업데이트 중..."),
         ("data_preprocessor.py", "[STEP 2] 데이터 전처리 및 라벨링 중..."),
-        ("aegis_dnn_trainer.py", "[STEP 3] MPS 가속 기반 딥러닝 뇌 재설계 중..."),
+        ("aegis_brain_trainer.py", "[STEP 3] MPS 가속 기반 딥러닝 뇌 재설계 중..."),
         ("aegis_automation.py", "[STEP 4] 완성된 뇌를 통한 오늘의 확률 진단 및 리포트 기록 중...")
     ]
 
