@@ -32,6 +32,13 @@ def train_aegis_model():
     device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
     
     data_path = os.path.expanduser("~/Desktop/xrp_research/ml_ready_data.csv")
+    if not os.path.exists(data_path):
+        data_path = "ml_ready_data.csv"
+
+    if not os.path.exists(data_path):
+        print(f"⚠️ 학습 데이터({data_path})를 찾을 수 없습니다. 전처리 스크립트를 먼저 실행하세요.")
+        return
+
     df = pd.read_csv(data_path, index_col='Date', parse_dates=True).dropna()
 
     X = df.drop(columns=['Target_Buy_Signal', 'Future_XRP_3d'], errors='ignore')
@@ -70,7 +77,13 @@ def train_aegis_model():
     print(f"🎯 4D 시공간 학습 완료! 예측 정확도: {accuracy * 100:.2f}%")
     
     model_save_path = os.path.expanduser("~/Desktop/xrp_research/aegis_brain.pth")
+
+    # 폴더가 없으면 현재 경로에 저장 (Fallback)
+    if not os.path.exists(os.path.dirname(model_save_path)):
+        model_save_path = "aegis_brain.pth"
+
     torch.save(model.state_dict(), model_save_path)
+    print(f"💾 모델 저장 완료: {model_save_path}")
     print("="*50)
 
 if __name__ == "__main__":

@@ -118,15 +118,6 @@ def calculate_rsi(data, window=14):
     rs = gain / loss
     return 100 - (100 / (1 + rs))
 
-# 🧬 Features used by the pre-trained AegisDNN (Do not change order or content without retraining)
-LEGACY_FEATURES = [
-    'XRP', 'DXY', 'NASDAQ',
-    'XRP_Return_1d', 'XRP_Vol_1d',
-    'Ret_Week', 'Ret_Month', 'Ret_3Month', 'Ret_6Month', 'Ret_Year',
-    'MA7', 'MA30', 'MA90', 'MA180', 'MA200',
-    'XRP_RSI_14', 'DXY_Return_1d', 'NASDAQ_Return_1d'
-]
-
 def get_gemini_insight(data_dict, am):
     if not HAS_GEMINI:
         return "[🧠 AI 직관] Google Generative AI 모듈 미설치로 분석 불가."
@@ -168,16 +159,20 @@ def get_gemini_insight(data_dict, am):
         1. **Perception (Analysis):** Analyze each timeframe layer independently. What is the story of the Micro, Meso, and Macro data?
         2. **Criticism (Reflexion):** Adopt a "Devil's Advocate" persona (Multi-Agent Critic). Criticize your own initial perception. Are you overreacting to short-term noise? Are you ignoring a macro downtrend? Is the machine probability ({data_dict['prob']:.2f}%) trustworthy given the funding rates?
         3. **Synthesis (Conclusion):** Synthesizing the analysis and the critique, provide a final actionable conclusion.
+        4. **Language & Formatting:**
+           - **MUST** write the entire response in **Korean (한국어)**.
+           - Use **emojis** liberally to improve readability.
+           - Use clear **paragraph breaks** and bullet points.
 
         OUTPUT FORMAT:
         [🧠 AEGIS Chain-of-Thought]
-        1. 🔍 Micro/Meso/Macro Analysis: (Brief bullet points summarizing the 3 layers)
-        2. ⚖️ Critic's Review: (Counter-arguments and risk assessment)
+        1. 🔍 Micro/Meso/Macro Analysis: (Brief bullet points summarizing the 3 layers in Korean)
+        2. ⚖️ Critic's Review: (Counter-arguments and risk assessment in Korean)
 
         [🔥 Final Action Plan]
-        - Verdict: (Buy / Sell / Wait)
-        - Confidence: (Low / Medium / High)
-        - Strategy: (Specific guidance)
+        - Verdict: (매수 / 매도 / 관망)
+        - Confidence: (높음 / 중간 / 낮음)
+        - Strategy: (Specific guidance in Korean)
         """
         response = client.models.generate_content(model='gemini-2.5-flash', contents=prompt)
         return response.text.strip()
@@ -252,25 +247,32 @@ def run_daily_execution():
 
     base_df = pd.read_csv(data_path, index_col='Date', parse_dates=True)
 
-    # 🛡️ STRICTLY Select Legacy Features for DNN
-    # We verify that LEGACY_FEATURES exist in base_df.
-    # If base_df has new columns (from upgraded preprocessor), we ignore them here.
-    dnn_features_df = base_df[LEGACY_FEATURES]
+    # 🛡️ Dynamic Feature Selection (Replaces LEGACY_FEATURES)
+    # Detect features used in training by dropping targets
+    feature_columns = [col for col in base_df.columns if col not in ['Target_Buy_Signal', 'Future_XRP_3d']]
+
+    dnn_features_df = base_df[feature_columns]
     
     scaler = StandardScaler()
     scaler.fit(dnn_features_df)
 
-    # Scale current live data (subset to legacy features)
-    X_live_legacy = latest_data[LEGACY_FEATURES]
-    X_live_scaled = scaler.transform(X_live_legacy)
+    # Scale current live data (subset to matching features)
+    # Ensure live data has all columns
+    for col in feature_columns:
+        if col not in latest_data.columns:
+            print(f"⚠️ 경고: 다음 피처가 실시간 데이터에 없습니다: {col}. 0으로 채웁니다.")
+            latest_data[col] = 0
+
+    X_live_sorted = latest_data[feature_columns]
+    X_live_scaled = scaler.transform(X_live_sorted)
 
     device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
     model_path = os.path.expanduser("~/Desktop/xrp_research/aegis_brain.pth")
     if not os.path.exists(model_path):
         model_path = "aegis_brain.pth"
 
-    # Model expects input size corresponding to LEGACY_FEATURES
-    model = AegisDNN(input_size=len(LEGACY_FEATURES)).to(device)
+    # Model expects input size corresponding to loaded features
+    model = AegisDNN(input_size=len(feature_columns)).to(device)
 
     # If the model file exists, load it.
     if os.path.exists(model_path):
