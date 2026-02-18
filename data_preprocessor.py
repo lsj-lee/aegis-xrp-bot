@@ -14,13 +14,14 @@ def calculate_rsi(data, window=14):
 
 def calculate_advanced_features(df):
     """
-    7가지 타임프레임(Micro, Meso, Macro)에 대한 심층 지표를 계산합니다.
+    [어슴새벽 프레임워크 반영]
+    Micro(단기), Meso(중기), Macro(장기)의 다차원 시공간(Time-Space) 지표를 계산합니다.
     """
-    # [Micro] 1d, 7d
+    # [Micro] 1d, 7d - 단기 변동성 및 모멘텀 (Entropy Check)
     df['XRP_Vol_7d'] = df['XRP'].pct_change().rolling(7).std()
     df['XRP_Momentum_7d'] = df['XRP'].pct_change(7)
 
-    # [Meso] 14d, 30d
+    # [Meso] 14d, 30d - 추세 및 패턴 (Trend Evolution)
     df['MA14'] = df['XRP'].rolling(14).mean()
     # MA30 already calculated in main function, but let's be safe
     if 'MA30' not in df.columns:
@@ -36,7 +37,7 @@ def calculate_advanced_features(df):
     df['XRP_BB_Lower'] = rolling_mean - (rolling_std * 2)
     df['XRP_BB_Width'] = (df['XRP_BB_Upper'] - df['XRP_BB_Lower']) / rolling_mean
 
-    # [Macro] 90d, 180d, 365d
+    # [Macro] 90d, 180d, 365d - 장기 사이클 및 상대적 위치 (Time Dimension)
     for window in [90, 180, 365]:
         df[f'XRP_Max{window}'] = df['XRP'].rolling(window).max()
         df[f'XRP_Min{window}'] = df['XRP'].rolling(window).min()
@@ -47,7 +48,7 @@ def calculate_advanced_features(df):
 
 # 🔴 메인 시스템이 찾을 수 있도록 이름을 'preprocess_for_dl'로 되돌렸습니다.
 def preprocess_for_dl():
-    print("⚙️ AEGIS 3.0 [2단계] 다차원 시공간 데이터 전처리 시작...")
+    print("⚙️ AEGIS 3.0 [2단계] '어슴새벽' 프레임워크 기반 전처리 시작...")
     
     # 안정적인 8년치 데이터를 직접 수집하여 시공간 지표 생성
     tickers = {'XRP': 'XRP-USD', 'DXY': 'DX-Y.NYB', 'NASDAQ': '^IXIC'}
