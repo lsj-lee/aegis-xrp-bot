@@ -4,92 +4,22 @@ import time
 import datetime
 import subprocess
 import argparse
-import shutil
+import glob
 
-def check_and_apply_evolution():
-    PROPOSAL_FILE = "aegis_skeleton_proposal.py"
-    BRIEFING_FILE = "aegis_briefing.md"
-
-    if os.path.exists(PROPOSAL_FILE):
-        print("\n🚀 [시스템 진화 감지] 새로운 시스템 업데이트 제안이 있습니다!")
-
-        target_file = "aegis_main_system.py" # Default
-        try:
-            with open(PROPOSAL_FILE, "r", encoding="utf-8") as f:
-                first_line = f.readline().strip()
-                if first_line.startswith("# TARGET:"):
-                    target_file = first_line.split(":", 1)[1].strip()
-        except Exception as e:
-            print(f"⚠️ 제안 파일 읽기 실패: {e}")
-            return
-
-        if os.path.exists(BRIEFING_FILE):
-            print(f"\n📄 [브리핑 파일 읽기] - {BRIEFING_FILE}")
-            print("-" * 50)
-            with open(BRIEFING_FILE, "r", encoding="utf-8") as f:
-                print(f.read())
-            print("-" * 50)
-
-        # Visual Diff
-        if shutil.which("code"):
-            print(f"🖥️ VS Code를 실행하여 변경 사항을 비교합니다: {target_file} vs {PROPOSAL_FILE}")
-            try:
-                subprocess.run(["code", "--diff", target_file, PROPOSAL_FILE])
-            except Exception as e:
-                print(f"⚠️ VS Code 실행 실패: {e}")
-        else:
-            print("⚠️ 'code' 명령어를 찾을 수 없어 VS Code 비교를 건너뜁니다.")
-
-        while True:
-            choice = input("\n✅ 승인하시겠습니까? (y/n): ").strip().lower()
-            if choice == 'y':
-                print("\n🔄 시스템 업데이트를 시작합니다...")
-
-                try:
-                    subprocess.run(["git", "add", "."], check=False)
-                    subprocess.run(["git", "commit", "-m", f"Backup before AEGIS Evolution ({datetime.datetime.now()})"], check=False)
-                    print("💾 현재 상태 Git 백업 완료.")
-                except Exception:
-                    print("⚠️ Git 백업 실패. 계속 진행합니다.")
-
-                try:
-                    with open(PROPOSAL_FILE, "r", encoding="utf-8") as f:
-                        lines = f.readlines()
-
-                    if lines and lines[0].startswith("# TARGET:"):
-                        new_code = "".join(lines[1:])
-                    else:
-                        new_code = "".join(lines)
-
-                    with open(target_file, "w", encoding="utf-8") as f:
-                        f.write(new_code)
-
-                    print(f"✅ {target_file} 업데이트 완료.")
-
-                    if os.path.exists(PROPOSAL_FILE): os.remove(PROPOSAL_FILE)
-                    if os.path.exists(BRIEFING_FILE): os.remove(BRIEFING_FILE)
-
-                    print("🔄 시스템을 재시작합니다...")
-                    os.execv(sys.executable, [sys.executable] + sys.argv)
-
-                except Exception as e:
-                    print(f"❌ 업데이트 중 치명적 오류 발생: {e}")
-                    return
-
-            elif choice == 'n':
-                del_choice = input("🗑️ 제안 파일을 삭제하시겠습니까? (y/n): ").strip().lower()
-                if del_choice == 'y':
-                    if os.path.exists(PROPOSAL_FILE): os.remove(PROPOSAL_FILE)
-                    if os.path.exists(BRIEFING_FILE): os.remove(BRIEFING_FILE)
-                    print("🗑️ 제안 파일이 삭제되었습니다.")
-                else:
-                    print("🔒 제안 파일을 보존합니다.")
-                break
-            else:
-                print("⚠️ 잘못된 입력입니다.")
+def check_pending_proposals():
+    """
+    Checks if there are pending proposals in the evolution queue.
+    """
+    queue_dir = "evolution_queue"
+    if os.path.exists(queue_dir):
+        proposals = glob.glob(os.path.join(queue_dir, "*_proposal.py"))
+        if proposals:
+            print(f"\n🚀 [시스템 진화 감지] {len(proposals)}개의 대기 중인 시스템 업데이트 제안이 있습니다!")
+            print(f"👉 'python aegis_system_evolver.py --review' 명령어로 검토 및 승인하세요.")
+            print("-" * 65)
 
 def run_pipeline(auto_sleep=False):
-    check_and_apply_evolution()
+    check_pending_proposals()
 
     start_time = time.time()
     now_str = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
