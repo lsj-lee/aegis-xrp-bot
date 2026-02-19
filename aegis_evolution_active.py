@@ -19,13 +19,13 @@ class GatedResidualNetwork(nn.Module):
         self.dense_layer = nn.Linear(input_size, hidden_size)
         self.glu_layer = nn.Linear(hidden_size, 2 * output_size)
         self.dropout = nn.Dropout(dropout_rate)
-        
+
         # Linear layer for residual connection if input and output sizes differ
         self.residual_layer = nn.Linear(input_size, output_size) if input_size != output_size else None
 
     def forward(self, x):
         # x shape: (batch_size, seq_len, input_size) or (batch_size, input_size)
-        
+
         # Layer norm on input
         x_norm = self.layernorm(x)
 
@@ -40,7 +40,7 @@ class GatedResidualNetwork(nn.Module):
 
         # Dropout
         glu_gated = self.dropout(glu_gated)
-        
+
         # Residual connection
         if self.residual_layer is not None:
             residual = self.residual_layer(x)
@@ -83,7 +83,7 @@ class AegisMultiHeadSelfAttention(nn.Module):
         assert d_model % num_heads == 0, "d_model must be divisible by num_heads"
         self.d_k = d_model // num_heads
         self.num_heads = num_heads
-        
+
         # Q, K, V projections and output projection
         self.q_proj = nn.Linear(d_model, d_model)
         self.k_proj = nn.Linear(d_model, d_model)
