@@ -13,4 +13,4 @@
 __pycache__/
 .venv/
 .DS_Store
-*.pyc
+*.pycaegis_brain.pth
