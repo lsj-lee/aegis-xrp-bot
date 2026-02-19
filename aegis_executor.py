@@ -139,7 +139,7 @@ def get_gemini_insight(data_dict, am):
            - Consider Time, Utility, Energy, and Risk/Opportunity Ratios.
         3. **The Frog Strategy (청개구리 전략):**
            - **Rule:** When the crowd is fearful (Fear & Greed Index < 10), it is the "Optimal Accumulation Zone".
-           - **Action:** Issue a STRONG BUY signal during extreme fear. Be greedy when others are fearful.
+           - **Interpretation:** Currently 'Extreme Fear ({data_dict['fng']})'. Interpret this not as risk, but as a pre-dawn opportunity (Dawn's Edge) for bold accumulation. Be greedy when others are paralyzed.
         4. **Asset Definition:** XRP is NOT just a coin. It is the **"Infrastructure Asset selected by Financial Elites"** (ISO 20022).
 
         MACRO CONTEXT (Must Integration):
@@ -156,27 +156,29 @@ def get_gemini_insight(data_dict, am):
         - RSI (14): {data_dict['rsi']:.2f}
 
         TECHNICAL METRICS (7-Timeframe):
-        [Micro] 1d Return: {s('XRP_Return_1d', '{:.2%}')}, 7d Vol: {s('XRP_Vol_7d', '{:.4f}')}
-        [Meso] MA Divergence (14d/30d): {s('XRP_MA14_Div', '{:.2%}')} / {s('XRP_MA30_Div', '{:.2%}')}
-        [Macro] Dist from 365d High: {s('XRP_Dist_Max365', '{:.2%}')}
+        [초단기] 1d Return: {s('XRP_Return_1d', '{:.2%}')}, 7d Vol: {s('XRP_Vol_7d', '{:.4f}')}
+        [중기] MA Divergence (14d/30d): {s('XRP_MA14_Div', '{:.2%}')} / {s('XRP_MA30_Div', '{:.2%}')}
+        [장기] Dist from 365d High: {s('XRP_Dist_Max365', '{:.2%}')}
 
         INSTRUCTIONS:
         1. **Analysis (NDA/TE):** Apply the formulas conceptually to the current market state.
-           - Explicitly mention "NDA" (Multi-Dimensional Analysis) and "TE" (Time Evolution) formulas.
-        2. **Evolution Research:** Analyze the DNN architecture and suggest technical improvements (Sliding Window, TFT/Transformer, Custom Loss).
-        3. **Contrarian Check:** If F&G < 20, emphasize the "Frog Strategy". If F&G > 80, warn of overheating.
+           - Explicitly mention "NDA" and "TE" formulas as text.
+           - Use Korean headers for timeframes: '초단기/중기/장기 분석'.
+        2. **Evolution Research:** Analyze the DNN architecture and suggest technical improvements (Transformer/TFT).
+        3. **Contrarian Check:** If F&G < 20, emphasize the "Frog Strategy" (Dawn's Edge). If F&G > 80, warn of overheating.
         4. **Synthesis:** Combine technicals, philosophy, and macro context (2026/2027) into a cohesive narrative.
 
         OUTPUT FORMAT (KOREAN ONLY, Use Emojis):
         [🧠 AEGIS Chain-of-Thought]
         - NDA 공식: $NDA = (D \\times M) / (A \\times p) \\times (In/En)$
         - TE 공식: $TE = T \\times (1/U) \\times (En) / (R/O)$
-        - (Apply these formulas to current data and explain the reasoning process)
+        - (Apply these formulas to current data. Analyze using '초단기/중기/장기 분석' headers.)
 
         [🧬 Aegis Evolution Research]
         - 현재 38개 피처 기반의 슬라이딩 윈도우(Sliding Window) 학습 효율성 진단.
-        - MacBook Pro M5 환경에서 정확도를 높이기 위한 Transformer 또는 LSTM 도입 제안.
-        - 정확도 99.41%를 유지하며 '일반화 성능'을 올리기 위한 아키텍처 개선 방안.
+        - MacBook Pro M5 환경에서 정확도를 높이기 위한 Transformer 또는 TFT(Temporal Fusion Transformer) 도입 제안.
+        - 정확도 99.49%를 유지하며 '일반화 성능'을 올리기 위한 아키텍처 개선 방안.
+        - MPS(Metal Performance Shaders) 최적화에 대한 기술적 조언 포함.
 
         [🔥 Final Action Plan]
         - 결론: (강력 매수 / 분할 매수 / 관망 / 매도)
