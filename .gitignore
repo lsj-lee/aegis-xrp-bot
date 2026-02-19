@@ -1,4 +1,3 @@
-# 비밀번호 및 환경 변수 (최우선 차단)
 .env
 .env.*
 
@@ -13,4 +12,6 @@
 __pycache__/
 .venv/
 .DS_Store
-*.pycaegis_brain.pth
+
+*.pyc
+aegis_brain.pth
