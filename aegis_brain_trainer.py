@@ -8,27 +8,59 @@ import os
 import warnings
 warnings.filterwarnings('ignore')
 
-class AegisDNN(nn.Module):
-    def __init__(self, input_size):
-        super(AegisDNN, self).__init__()
-        self.network = nn.Sequential(
-            nn.Linear(input_size, 256),
-            nn.BatchNorm1d(256),
-            nn.ReLU(),
-            nn.Dropout(0.2),
-            nn.Linear(256, 128),
-            nn.ReLU(),
-            nn.Linear(128, 64),
-            nn.ReLU(),
-            nn.Linear(64, 32),
-            nn.ReLU(),
-            nn.Linear(32, 1),
+# 🧬 AEGIS Evolution Architecture (Transformer/TFT Based)
+class AegisEvolution(nn.Module):
+    def __init__(self, input_size, d_model=128, nhead=4, num_layers=3, dropout=0.2):
+        super(AegisEvolution, self).__init__()
+
+        # Feature Embedding Layer (Dense -> High Dim)
+        self.feature_embedding = nn.Sequential(
+            nn.Linear(input_size, d_model),
+            nn.LayerNorm(d_model),
+            nn.GELU()
+        )
+
+        # Transformer Encoder Block (Self-Attention + FeedForward)
+        # batch_first=True ensures input is (Batch, Seq, Feature)
+        encoder_layer = nn.TransformerEncoderLayer(
+            d_model=d_model,
+            nhead=nhead,
+            dim_feedforward=d_model*4,
+            dropout=dropout,
+            batch_first=True,
+            activation='gelu'
+        )
+        self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
+
+        # Final Output Head (Value Projection)
+        self.head = nn.Sequential(
+            nn.Linear(d_model, 64),
+            nn.GELU(),
+            nn.Dropout(dropout),
+            nn.Linear(64, 1),
             nn.Sigmoid()
         )
-    def forward(self, x): return self.network(x)
+
+    def forward(self, x):
+        # x: (Batch, Input_Size)
+
+        # 1. Embed Features
+        x = self.feature_embedding(x) # -> (Batch, d_model)
+
+        # 2. Add Sequence Dimension for Transformer (SeqLen=1)
+        x = x.unsqueeze(1) # -> (Batch, 1, d_model)
+
+        # 3. Apply Transformer Encoder
+        x = self.transformer_encoder(x) # -> (Batch, 1, d_model)
+
+        # 4. Remove Sequence Dimension
+        x = x.squeeze(1) # -> (Batch, d_model)
+
+        # 5. Output Probability
+        return self.head(x)
 
 def train_aegis_model():
-    print("\n🧠 AEGIS 3.0 [3단계] 시공간 심층 신경망(4D DNN) 두뇌 학습 시작...")
+    print("\n🧠 AEGIS 4.0 [3단계] 시공간 트랜스포머(Evolution) 두뇌 학습 시작...")
     device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
     
     data_path = os.path.expanduser("~/Desktop/xrp_research/ml_ready_data.csv")
@@ -53,8 +85,12 @@ def train_aegis_model():
     X_tensor = torch.tensor(X_resampled, dtype=torch.float32).to(device)
     y_tensor = torch.tensor(y_resampled.values, dtype=torch.float32).view(-1, 1).to(device)
 
-    model = AegisDNN(input_size=X.shape[1]).to(device)
+    # Instantiate the new Evolution model
+    model = AegisEvolution(input_size=X.shape[1]).to(device)
     criterion = nn.BCELoss()
+    # Increased learning rate slightly for Transformer or kept same?
+    # Adam usually works well with 0.001, but Transformers might need warmup.
+    # Keeping simple for now as per "grafting" request.
     optimizer = optim.Adam(model.parameters(), lr=0.001)
 
     epochs = 500
@@ -74,7 +110,7 @@ def train_aegis_model():
         accuracy = ((predicted >= 0.5).float() == y_tensor).sum().item() / y_tensor.size(0)
 
     print("="*50)
-    print(f"🎯 4D 시공간 학습 완료! 예측 정확도: {accuracy * 100:.2f}%")
+    print(f"🎯 4D Evolution 학습 완료! 예측 정확도: {accuracy * 100:.2f}%")
     
     model_save_path = os.path.expanduser("~/Desktop/xrp_research/aegis_brain.pth")
 
