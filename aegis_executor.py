@@ -79,25 +79,56 @@ elif HAS_GEMINI and not GEMINI_API_KEY:
 elif not HAS_GEMINI:
     print("⚠️ 경고: google-genai 모듈이 설치되지 않았습니다. AI 분석 기능이 제한됩니다.")
 
-# 🏗️ Legacy DNN Model Architecture
-class AegisDNN(nn.Module):
-    def __init__(self, input_size):
-        super(AegisDNN, self).__init__()
-        self.network = nn.Sequential(
-            nn.Linear(input_size, 256),
-            nn.BatchNorm1d(256),
-            nn.ReLU(),
-            nn.Dropout(0.2),
-            nn.Linear(256, 128),
-            nn.ReLU(),
-            nn.Linear(128, 64),
-            nn.ReLU(),
-            nn.Linear(64, 32),
-            nn.ReLU(),
-            nn.Linear(32, 1),
+# 🧬 AEGIS Evolution Architecture (Transformer/TFT Based)
+class AegisEvolution(nn.Module):
+    def __init__(self, input_size, d_model=128, nhead=4, num_layers=3, dropout=0.2):
+        super(AegisEvolution, self).__init__()
+
+        # Feature Embedding Layer (Dense -> High Dim)
+        self.feature_embedding = nn.Sequential(
+            nn.Linear(input_size, d_model),
+            nn.LayerNorm(d_model),
+            nn.GELU()
+        )
+
+        # Transformer Encoder Block (Self-Attention + FeedForward)
+        # batch_first=True ensures input is (Batch, Seq, Feature)
+        encoder_layer = nn.TransformerEncoderLayer(
+            d_model=d_model,
+            nhead=nhead,
+            dim_feedforward=d_model*4,
+            dropout=dropout,
+            batch_first=True,
+            activation='gelu'
+        )
+        self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
+
+        # Final Output Head (Value Projection)
+        self.head = nn.Sequential(
+            nn.Linear(d_model, 64),
+            nn.GELU(),
+            nn.Dropout(dropout),
+            nn.Linear(64, 1),
             nn.Sigmoid()
         )
-    def forward(self, x): return self.network(x)
+
+    def forward(self, x):
+        # x: (Batch, Input_Size)
+
+        # 1. Embed Features
+        x = self.feature_embedding(x) # -> (Batch, d_model)
+
+        # 2. Add Sequence Dimension for Transformer (SeqLen=1)
+        x = x.unsqueeze(1) # -> (Batch, 1, d_model)
+
+        # 3. Apply Transformer Encoder
+        x = self.transformer_encoder(x) # -> (Batch, 1, d_model)
+
+        # 4. Remove Sequence Dimension
+        x = x.squeeze(1) # -> (Batch, d_model)
+
+        # 5. Output Probability
+        return self.head(x)
 
 # 🛠️ Data Helpers
 def get_upbit_krw_price():
@@ -177,7 +208,7 @@ def get_gemini_insight(data_dict, am):
         return f"[🧠 AI 직관] 분석 실패: {e}"
 
 def run_daily_execution():
-    print("🔮 [AEGIS 3.0 DNN & Gemini 하이브리드 - 보안 모드 가동]")
+    print("🔮 [AEGIS 4.0 Evolution & Gemini 하이브리드 - 보안 모드 가동]")
     
     tickers = {'XRP': 'XRP-USD', 'DXY': 'DX-Y.NYB', 'NASDAQ': '^IXIC', 'USDKRW': 'KRW=X'}
     end_date = datetime.datetime.now().strftime('%Y-%m-%d')
@@ -270,7 +301,7 @@ def run_daily_execution():
 
     # Model initialization logic with strict data alignment (Aegis 4.0 Standard)
     input_size = X_live_scaled.shape[1]
-    model = AegisDNN(input_size=input_size).to(device)
+    model = AegisEvolution(input_size=input_size).to(device)
 
     if os.path.exists(model_path):
         try:
