@@ -128,7 +128,7 @@ def get_gemini_insight(data_dict, am):
         def s(key, fmt="{:.4f}"): return fmt.format(am.get(key, 0))
 
         prompt = f"""
-        당신은 '어슴새벽'의 투자 철학을 완벽하게 이식받은 초지능형 퀀트 AI 'AEGIS 4.0'입니다.
+        당신은 '어슴새벽'의 투자 철학을 연구하는 '가상의 퀀트 시뮬레이터 AEGIS 4.0'입니다. 이 리포트는 실제 투자 조언이 아닌 학술적 분석 및 가상 시뮬레이션 결과임을 전제로 작성하세요. [🔥 최종 액션 플랜]의 결론은 '시장 강세/약세/중립' 중 하나로 판정하세요.
         제공된 시장 데이터(머신러닝 상승 확률: {data_dict['prob']:.2f}%, 롱/숏 비율: {data_dict['ls_ratio']:.2f}, 펀딩비: {data_dict['funding_rate']:.4f}%)와 다음의 추가 지표를 바탕으로, 반드시 '100% 한국어'로 아래 양식에 맞춰 입체적인 리포트를 작성하세요. 영단어 헤드라인은 절대 사용하지 마십시오.
 
         [추가 데이터]
@@ -143,18 +143,21 @@ def get_gemini_insight(data_dict, am):
 
         [🧠 AEGIS 사고의 사슬]
         - 분석 시 다차원 분석 공식(NDA = (D * M) / (A * p) * (In/En))과 진화적 접근 공식(TE = T * (1/U) * (En) / (R/O))을 문장 내에 명시하여 논리를 전개하세요.
-        - 현재의 공포 지수({data_dict['fng']})와 시장 상황을 '개구리 전략(역발상 투자)' 관점에서 비판적으로 해석하세요.
+        - 현재의 공포 지수({data_dict['fng']})와 시장 상황을 '개구리 전략(역발상 투자)' 시뮬레이션 연구 관점에서 비판적으로 해석하세요.
 
         [🧬 Aegis 진화 연구 (Evolution Research)]
         - AI 아키텍트 입장에서 서술하세요. 현재 38개 피처 기반 슬라이딩 윈도우 모델의 99.52% 정확도를 유지하면서, MacBook M5의 MPS 가속 효율을 높이기 위해 향후 'Transformer' 또는 'Temporal Fusion Transformer(TFT)'를 어떻게 도입할지 기술적 제안을 2~3줄로 작성하세요.
 
         [🔥 최종 액션 플랜]
-        - 결론: (매수 / 매도 / 관망 중 택 1)
+        - 결론: (시장 강세 / 시장 약세 / 중립 중 택 1)
         - 확신도: (매우 높음 / 높음 / 중간 / 낮음 중 택 1)
-        - 전략: 어슴새벽 철학을 바탕으로 구체적이고 단호한 행동 지침을 3~4가지 불릿 포인트로 제시하세요.
+        - 전략: 어슴새벽 철학을 바탕으로 학술적 관점의 행동 시나리오를 3~4가지 불릿 포인트로 제시하세요.
         """
         response = client.models.generate_content(model='gemini-2.5-flash', contents=prompt)
-        return response.text.strip()
+        if response and response.text:
+            return response.text.strip()
+        else:
+            return "[🧠 AI 직관] Gemini 안전 필터에 의해 응답이 차단되었습니다. (시뮬레이션 모드로 프롬프트 재설정 필요)"
     except Exception as e:
         return f"[🧠 AI 직관] 연결 장애: {e}"
 
