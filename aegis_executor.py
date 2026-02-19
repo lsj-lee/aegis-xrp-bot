@@ -133,9 +133,9 @@ def get_gemini_insight(data_dict, am):
         Your mission is to provide deep insights into the crypto market, specifically XRP, by applying a contrarian and multi-dimensional framework.
 
         CORE PHILOSOPHY & MENTAL MODELS:
-        1. **Multi-Dimensional Analysis (NDA):** Formula: (D × M) / (A × p) × (In/En)
+        1. **Multi-Dimensional Analysis (NDA):** Formula: $NDA = (D \\times M) / (A \\times p) \\times (In/En)$
            - Focus on Depth, Momentum, Adoption vs Price, Innovation vs Entropy.
-        2. **Time Evolution (TE):** Formula: T × (1/U) × (En) ÷ (R/O)
+        2. **Time Evolution (TE):** Formula: $TE = T \\times (1/U) \\times (En) / (R/O)$
            - Consider Time, Utility, Energy, and Risk/Opportunity Ratios.
         3. **The Frog Strategy (청개구리 전략):**
            - **Rule:** When the crowd is fearful (Fear & Greed Index < 10), it is the "Optimal Accumulation Zone".
@@ -169,14 +169,14 @@ def get_gemini_insight(data_dict, am):
 
         OUTPUT FORMAT (KOREAN ONLY, Use Emojis):
         [🧠 AEGIS Chain-of-Thought]
-        - (Briefly explain the reasoning process behind the analysis)
-
-        [🧠 AEGIS '어슴새벽' 인사이트]
-        1. 🌌 다차원 분석 (NDA/TE Model): (Apply formulas & philosophy explicitly)
-        2. 🐸 청개구리 전략 및 리스크: (Sentiment analysis & Contrarian view)
+        - NDA 공식: $NDA = (D \\times M) / (A \\times p) \\times (In/En)$
+        - TE 공식: $TE = T \\times (1/U) \\times (En) / (R/O)$
+        - (Apply these formulas to current data and explain the reasoning process)
 
         [🧬 Aegis Evolution Research]
-        - (Self-diagnosis of DNN & Technical suggestions: Sliding Window, TFT, Custom Loss)
+        - 현재 38개 피처 기반의 슬라이딩 윈도우(Sliding Window) 학습 효율성 진단.
+        - MacBook Pro M5 환경에서 정확도를 높이기 위한 Transformer 또는 LSTM 도입 제안.
+        - 정확도 99.41%를 유지하며 '일반화 성능'을 올리기 위한 아키텍처 개선 방안.
 
         [🔥 Final Action Plan]
         - 결론: (강력 매수 / 분할 매수 / 관망 / 매도)
@@ -281,7 +281,7 @@ def run_daily_execution():
         model_path = "aegis_brain.pth"
 
     # Model initialization logic with strict data alignment (Aegis 4.0 Standard)
-    input_size = len(feature_columns)
+    input_size = X_live_scaled.shape[1]
     model = AegisDNN(input_size=input_size).to(device)
 
     if os.path.exists(model_path):
@@ -324,12 +324,10 @@ def run_daily_execution():
     if abs(funding_rate) > 0.05:
         warning_msg += " / 🟠 펀딩비 과열"
 
-    code_analysis = f"""[🎯 타점 분석 (Timeframe Zone)]
+    code_analysis = f"""[🎯 타점 분석] & [🤖 DNN & 선물 지표]
 ⚡ 단기 (1~2주): 매수 {fmt_price(st_buy)} / 매도 {fmt_price(st_sell)}
 🌊 중기 (1~3개월): 매집 {fmt_price(mt_buy)} / 익절 {fmt_price(mt_sell)}
 🌌 장기 (6개월+): 최후선 {fmt_price(lt_buy)} / 목표 {fmt_price(lt_sell_final)}
-
-[🤖 DNN & 선물 지표]
 - 확률: {prob_percent:.2f}% / 롱숏: {ls_ratio:.2f} / 펀딩: {funding_rate:.4f}%
 
 [⚠️ 시장 경보]
