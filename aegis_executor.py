@@ -127,35 +127,62 @@ def get_gemini_insight(data_dict, am):
         # Safe access to dict keys (am = advanced metrics)
         def s(key, fmt="{:.4f}"): return fmt.format(am.get(key, 0))
 
-        prompt = f"""
-        당신은 '어슴새벽'의 투자 철학을 연구하는 '가상의 퀀트 시뮬레이터 AEGIS 4.0'입니다. 이 리포트는 실제 투자 조언이 아닌 학술적 분석 및 가상 시뮬레이션 결과임을 전제로 작성하세요. [🔥 최종 액션 플랜]의 결론은 '시장 강세/약세/중립' 중 하나로 판정하세요.
-        제공된 시장 데이터(머신러닝 상승 확률: {data_dict['prob']:.2f}%, 롱/숏 비율: {data_dict['ls_ratio']:.2f}, 펀딩비: {data_dict['funding_rate']:.4f}%)와 다음의 추가 지표를 바탕으로, 반드시 '100% 한국어'로 아래 양식에 맞춰 입체적인 리포트를 작성하세요. 영단어 헤드라인은 절대 사용하지 마십시오.
-
-        [추가 데이터]
-        - 현재가: ${data_dict['price']:.4f} (₩{data_dict['price']*data_dict['krw_usd_rate']:,.0f})
-        - 공포/탐욕 지수: {data_dict['fng']}
+        # [Step 1: Quantitative Logic (English)]
+        market_context = f"""
+        Current XRP Market Data:
+        - Price: ${data_dict['price']:.4f} (KRW: {data_dict['price']*data_dict['krw_usd_rate']:,.0f})
+        - F&G Index: {data_dict['fng']}
         - RSI (14): {data_dict['rsi']:.2f}
-        - 변동성(7d): {s('XRP_Vol_7d')}
-        - 이격도(14d/30d): {s('XRP_MA14_Div', '{:.2%}')} / {s('XRP_MA30_Div', '{:.2%}')}
-        - 장기 고점 대비(365d): {s('XRP_Dist_Max365', '{:.2%}')}
-
-        [🎯 타점 분석] & [🤖 DNN & 선물 지표] & [⚠️ 시장 경보] (기존 로직 유지)
-
-        [🧠 AEGIS 사고의 사슬]
-        - 분석 시 다차원 분석 공식(NDA = (D * M) / (A * p) * (In/En))과 진화적 접근 공식(TE = T * (1/U) * (En) / (R/O))을 반드시 문장에 포함하여 설명하세요.
-        - 현재의 공포 지수({data_dict['fng']})와 시장 상황을 '개구리 전략(역발상 투자)' 시뮬레이션 연구 관점에서 비판적으로 해석하세요.
-
-        [🧬 에이지스 진화 연구]
-        - 이 섹션은 필수입니다. AI 아키텍트 관점에서, 현재 99.76% 정확도를 달성한 38개 피처 기반 모델을 발전시키기 위해 'Transformer' 또는 'Temporal Fusion Transformer(TFT)' 아키텍처를 어떻게 도입할지, 그리고 MacBook M5의 MPS 가속을 활용할 기술적 아이디어를 구체적으로 서술하세요.
-
-        [🔥 최종 액션 플랜]
-        - 결론: (시장 강세 / 시장 약세 / 중립 중 택 1)
-        - 확신도: (매우 높음 / 높음 / 중간 / 낮음 중 택 1)
-        - 전략: 어슴새벽 철학을 바탕으로 학술적 관점의 행동 시나리오를 3~4가지 불릿 포인트로 제시하세요.
+        - Volatility (7d): {s('XRP_Vol_7d')}
+        - MA Divergence (14d/30d): {s('XRP_MA14_Div', '{:.2%}')} / {s('XRP_MA30_Div', '{:.2%}')}
+        - Long Term High Dist (365d): {s('XRP_Dist_Max365', '{:.2%}')}
+        - AI Probability: {data_dict['prob']:.2f}%
+        - L/S Ratio: {data_dict['ls_ratio']:.2f}
+        - Funding Rate: {data_dict['funding_rate']:.4f}%
         """
-        response = client.models.generate_content(model='gemini-2.5-flash', contents=prompt)
-        if response and response.text:
-            return response.text.strip()
+
+        prompt_step_1 = f"""
+        {market_context}
+
+        Task: "Analyze the current XRP data using $NDA = (D \\times M) / (A \\times p) \\times (In/En)$ and $TE = T \\times (1/U) \\times (En) \\div (R/O)$. Explain the logical flow."
+        """
+        response_step_1 = client.models.generate_content(model='gemini-2.5-flash', contents=prompt_step_1)
+        result_step_1 = response_step_1.text if (response_step_1 and response_step_1.text) else "Step 1 Analysis Failed."
+
+        # [Step 2: AI Evolution Research (English)]
+        prompt_step_2 = """
+        Task: "As an AI Architect, suggest technical improvements like Transformer/TFT models and MPS acceleration for MacBook M5 to enhance the 99.46% accuracy."
+        """
+        response_step_2 = client.models.generate_content(model='gemini-2.5-flash', contents=prompt_step_2)
+        result_step_2 = response_step_2.text if (response_step_2 and response_step_2.text) else "Step 2 Research Failed."
+
+        # [Step 3: Synthesis & Translation (Final Output)]
+        prompt_step_3 = f"""
+        You are 'AEGIS 4.0', a virtual quant simulator.
+
+        [Input Analysis]
+        Step 1 (Quantitative Logic):
+        {result_step_1}
+
+        Step 2 (AI Evolution Research):
+        {result_step_2}
+
+        [Market Context]
+        {market_context}
+
+        Task: "Now, translate and synthesize all the above findings into a high-quality Korean report following this structure: [🎯 타점 분석], [🧠 AEGIS 사고의 사슬], [🧬 에이지스 진화 연구], [🔥 최종 액션 플랜]."
+
+        Requirements:
+        - The output must be 100% Korean (except for specific technical terms).
+        - [🎯 타점 분석]: Summarize the technical analysis.
+        - [🧠 AEGIS 사고의 사슬]: Explain the logic using the NDA and TE formulas mentioned in the input. Discuss the 'Frog Strategy' (contrarian approach) given the F&G index ({data_dict['fng']}).
+        - [🧬 에이지스 진화 연구]: Summarize the AI Architect's suggestions (Transformer/TFT, MPS, M5).
+        - [🔥 최종 액션 플랜]: Conclusion (Choose one: 시장 강세 / 시장 약세 / 중립), Confidence (High/Medium/Low), and Strategy (3-4 bullet points based on the 'Dawn's Edge' philosophy).
+        """
+        response_step_3 = client.models.generate_content(model='gemini-2.5-flash', contents=prompt_step_3)
+
+        if response_step_3 and response_step_3.text:
+            return response_step_3.text.strip()
         else:
             return "[🧠 AI 직관] Gemini 안전 필터에 의해 응답이 차단되었습니다. (시뮬레이션 모드로 프롬프트 재설정 필요)"
     except Exception as e:
