@@ -90,6 +90,64 @@ def save_user_request(request_text):
     except Exception as e:
         return False
 
+# --- [스케줄링 유틸리티 함수] ---
+def get_current_crontab():
+    """현재 crontab 내용을 문자열 리스트로 반환"""
+    try:
+        result = subprocess.run(["crontab", "-l"], capture_output=True, text=True)
+        if result.returncode == 0:
+            return result.stdout.splitlines()
+        else:
+            return [] # crontab이 없거나 권한 오류 시 빈 리스트 반환
+    except FileNotFoundError:
+        return []
+
+def update_crontab(new_lines):
+    """새로운 crontab 내용을 적용"""
+    cron_content = "\n".join(new_lines) + "\n"
+    try:
+        process = subprocess.Popen(['crontab', '-'], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        stdout, stderr = process.communicate(input=cron_content)
+        if process.returncode == 0:
+            return True, "스케줄이 성공적으로 업데이트되었습니다."
+        else:
+            return False, f"스케줄 업데이트 실패: {stderr.strip()}"
+    except Exception as e:
+        return False, f"오류 발생: {str(e)}"
+
+def get_aegis_jobs():
+    """# AEGIS-JOB 주석이 있는 작업만 추출"""
+    lines = get_current_crontab()
+    jobs = []
+    for line in lines:
+        if "# AEGIS-JOB" in line:
+            parts = line.split()
+            schedule = " ".join(parts[:5])
+            command = " ".join(parts[5:]).replace(" # AEGIS-JOB", "")
+            jobs.append({"schedule": schedule, "command": command})
+    return jobs
+
+def add_aegis_job(cron_schedule, script_path="aegis_main_system.py"):
+    """새로운 AEGIS 작업을 crontab에 추가"""
+    project_root = os.path.dirname(os.path.abspath(__file__))
+    python_exec = sys.executable
+
+    # 절대 경로로 명령어 구성
+    cmd = f"cd {project_root} && {python_exec} {script_path} --enable-sleep >> {project_root}/aegis_cron.log 2>&1"
+    new_line = f"{cron_schedule} {cmd} # AEGIS-JOB"
+
+    lines = get_current_crontab()
+    lines.append(new_line)
+
+    return update_crontab(lines)
+
+def clear_aegis_jobs():
+    """모든 AEGIS 작업을 crontab에서 삭제"""
+    lines = get_current_crontab()
+    new_lines = [line for line in lines if "# AEGIS-JOB" not in line]
+    return update_crontab(new_lines)
+
+
 # --- [더미 데이터 생성 함수 (안전장치)] ---
 def create_dummy_data(days=100):
     """데이터 로드 실패 시 UI 확인을 위한 더미 데이터를 생성합니다."""
@@ -219,7 +277,7 @@ def main():
     st.sidebar.title("🛡️ AEGIS SYSTEM")
 
     # 사이드바 메뉴 선택
-    menu = st.sidebar.radio("메뉴 선택", ["대시보드", "통합 커맨드 센터"])
+    menu = st.sidebar.radio("메뉴 선택", ["대시보드", "통합 커맨드 센터", "예약 및 스케줄 관리"])
 
     if menu == "대시보드":
         st.title("🛡️ AEGIS 대시보드 (XRP-BOT)")
@@ -428,7 +486,7 @@ def main():
         st.caption("추가 변경 사항이나 개선 요청을 입력하세요. 줄스(Jules)가 최우선으로 반영합니다.")
 
         with st.form("commander_request_form"):
-            request_text = st.text_area("💡 추가 변경/요청 사항 입력", placeholder="예: 차트의 상승 색상을 더 밝은 녹색으로 변경해줘.", height=100)
+            request_text = st.text_area("💡 추가 변경/요청 사항 입력", placeholder="예: 예약 시간을 5분 단위로 더 쪼개줘.", height=100)
             submit_request = st.form_submit_button("📩 명령 전송 (Send Command)")
 
         if submit_request and request_text:
@@ -436,6 +494,89 @@ def main():
                 st.success("✅ 명령이 성공적으로 접수되었습니다! ('user_requests.txt'에 저장됨)")
             else:
                 st.error("❌ 명령 저장 중 오류가 발생했습니다.")
+
+    elif menu == "예약 및 스케줄 관리":
+        st.title("🗓️ 예약 및 스케줄 관리 센터 (Scheduling Center)")
+        st.caption("시스템 자동 실행 시간을 설정하고 관리합니다.")
+
+        # 1. 현재 예약 현황
+        st.subheader("1️⃣ 현재 예약된 스케줄")
+        current_jobs = get_aegis_jobs()
+        if not current_jobs:
+            st.info("ℹ️ 현재 등록된 AEGIS 예약 작업이 없습니다.")
+        else:
+            job_df = pd.DataFrame(current_jobs)
+            st.table(job_df)
+
+        st.divider()
+
+        # 2. 새로운 예약 추가
+        st.subheader("2️⃣ 새로운 예약 추가")
+        st.caption("매일, 매주, 또는 특정 간격으로 시스템을 자동 실행합니다.")
+
+        tab1, tab2, tab3 = st.tabs(["매일 (Daily)", "매주 (Weekly)", "간격 (Interval)"])
+
+        with tab1:
+            st.markdown("##### 매일 정해진 시간에 실행")
+            daily_time = st.time_input("실행 시간 선택", datetime.time(9, 0))
+            if st.button("예약 적용 (Daily)", key="btn_daily"):
+                # Cron: MM HH * * *
+                cron_str = f"{daily_time.minute} {daily_time.hour} * * *"
+                success, msg = add_aegis_job(cron_str)
+                if success:
+                    st.success(f"✅ 매일 {daily_time}에 실행 예약되었습니다.")
+                    st.rerun()
+                else:
+                    st.error(msg)
+
+        with tab2:
+            st.markdown("##### 매주 특정 요일, 특정 시간에 실행")
+            col1, col2 = st.columns(2)
+            with col1:
+                # 0=Sunday, 1=Monday ... but cron expects 0-6 (Sun-Sat) or 1-7 (Mon-Sun).
+                # Python datetime weekday: 0=Mon, 6=Sun.
+                # Cron: 0-6 (Sun-Sat). Usually 1=Mon. Let's use name map for clarity.
+                days_map = {"월요일": 1, "화요일": 2, "수요일": 3, "목요일": 4, "금요일": 5, "토요일": 6, "일요일": 0}
+                selected_day = st.selectbox("요일 선택", list(days_map.keys()))
+            with col2:
+                weekly_time = st.time_input("실행 시간 선택", datetime.time(9, 0), key="weekly_time")
+
+            if st.button("예약 적용 (Weekly)", key="btn_weekly"):
+                # Cron: MM HH * * W
+                cron_day = days_map[selected_day]
+                cron_str = f"{weekly_time.minute} {weekly_time.hour} * * {cron_day}"
+                success, msg = add_aegis_job(cron_str)
+                if success:
+                    st.success(f"✅ 매주 {selected_day} {weekly_time}에 실행 예약되었습니다.")
+                    st.rerun()
+                else:
+                    st.error(msg)
+
+        with tab3:
+            st.markdown("##### 일정 시간 간격으로 실행")
+            interval_hours = st.number_input("시간 간격 (Hour)", min_value=1, max_value=23, value=1)
+
+            if st.button("예약 적용 (Interval)", key="btn_interval"):
+                # Cron: 0 */N * * *
+                cron_str = f"0 */{interval_hours} * * *"
+                success, msg = add_aegis_job(cron_str)
+                if success:
+                    st.success(f"✅ {interval_hours}시간마다 실행 예약되었습니다.")
+                    st.rerun()
+                else:
+                    st.error(msg)
+
+        st.divider()
+
+        # 3. 예약 관리 (삭제)
+        st.subheader("3️⃣ 예약 초기화")
+        if st.button("🗑️ 모든 AEGIS 예약 삭제 (Clear All)", type="primary"):
+            success, msg = clear_aegis_jobs()
+            if success:
+                st.warning("⚠️ 모든 AEGIS 예약이 삭제되었습니다.")
+                st.rerun()
+            else:
+                st.error(msg)
 
 if __name__ == "__main__":
     main()
