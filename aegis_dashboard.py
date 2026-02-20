@@ -4,6 +4,7 @@ import os
 import sys
 import subprocess
 import shutil
+from aegis_lib import AegisValidator
 import numpy as np
 import requests
 import json
@@ -134,6 +135,23 @@ def merge_pr(owner, repo, pr_number, token):
             return True, "병합 성공!"
         else:
             return False, f"병합 실패: {response.status_code} - {response.text}"
+    except Exception as e:
+        return False, str(e)
+
+def close_pr(owner, repo, pr_number, token):
+    """GitHub API를 통해 PR 닫기 (Close)"""
+    if not token:
+        return False, "GitHub Token이 필요합니다."
+
+    url = f"https://api.github.com/repos/{owner}/{repo}/pulls/{pr_number}"
+    headers = {"Authorization": f"token {token}", "Accept": "application/vnd.github.v3+json"}
+    payload = {"state": "closed"}
+    try:
+        response = requests.patch(url, headers=headers, json=payload)
+        if response.status_code == 200:
+            return True, "PR이 성공적으로 닫혔습니다 (폐기 완료)."
+        else:
+            return False, f"PR 닫기 실패: {response.status_code} - {response.text}"
     except Exception as e:
         return False, str(e)
 
@@ -319,6 +337,14 @@ def main():
 
             # 1. [최상단 배치] 즉시 분석 시작 버튼
             if st.button("🚀 즉시 분석 시작 (Start Immediate Analysis)", use_container_width=True, type="primary"):
+                 # [Verification Phase]
+                 impact = AegisValidator.analyze_impact("Start Immediate Analysis")
+                 if impact['risk_level'] == 'High':
+                     st.error(f"🚫 실행 차단됨: {impact['message']}")
+                     st.stop()
+                 elif impact['risk_level'] == 'Medium':
+                     st.warning(impact['message'])
+
                  with st.status("작전 수행 중... (분석 엔진 가동)", expanded=True) as status:
                      try:
                          process = subprocess.run([sys.executable, "aegis_automation.py"], capture_output=True, text=True)
@@ -415,6 +441,14 @@ def main():
                 check_model = st.checkbox("AI 모델 가중치 확인", value=True)
 
             if st.button("🚀 선택 항목 업데이트 실행", type="primary", key="btn_update_system"):
+                # [Command Verification]
+                if check_git and not AegisValidator.validate_command(["git", "pull"]):
+                    st.error("🚫 Git Pull Blocked.")
+                    st.stop()
+                if check_data and not AegisValidator.validate_command([sys.executable, "data_bank_builder.py"]):
+                    st.error("🚫 Data Sync Blocked.")
+                    st.stop()
+
                 with st.status("시스템 업데이트 진행 중...", expanded=True) as status:
                     # 1. Git Pull
                     if check_git:
@@ -513,6 +547,32 @@ def main():
                                     else:
                                         st.error(msg)
 
+                                # [PR 닫기 기능]
+                                if st.button(f"🗑️ PR 닫기(Close) (#{pr['number']})", key=f"close_{pr['number']}"):
+                                    st.session_state[f"confirm_close_{pr['number']}"] = True
+
+                            # [안전 장치 연동] - 폐기 확인 팝업
+                            if st.session_state.get(f"confirm_close_{pr['number']}"):
+                                st.warning("⚠️ 이 작전 계획(PR)을 정말 폐기하시겠습니까? (Irreversible Action)")
+                                impact = AegisValidator.analyze_impact(f"Close PR #{pr['number']}")
+                                st.caption(f"🛡️ Aegis Risk Analysis: {impact['message']}")
+
+                                c_conf, c_cancel = st.columns(2)
+                                with c_conf:
+                                    if st.button("확인 (Confirm)", key=f"conf_close_{pr['number']}"):
+                                        success, msg = close_pr(repo_owner, repo_name, pr['number'], github_token)
+                                        if success:
+                                            st.success(f"#{pr['number']} 폐기 완료!")
+                                            del st.session_state['prs'] # 목록 갱신 트리거
+                                            del st.session_state[f"confirm_close_{pr['number']}"]
+                                            st.rerun()
+                                        else:
+                                            st.error(msg)
+                                with c_cancel:
+                                    if st.button("취소 (Cancel)", key=f"cancel_close_{pr['number']}"):
+                                        del st.session_state[f"confirm_close_{pr['number']}"]
+                                        st.rerun()
+
             st.divider()
 
             # Section 3: Commander's Orders
@@ -524,6 +584,14 @@ def main():
                 submit_request = st.form_submit_button("📩 명령 전송 (Send Command)")
 
             if submit_request and request_text:
+                # [Impact Analysis]
+                impact = AegisValidator.analyze_impact(request_text)
+                if impact['risk_level'] == 'High':
+                    st.error(f"🚫 Critical Risk: {impact['message']}")
+                    st.stop()
+                elif impact['risk_level'] == 'Medium':
+                    st.warning(f"⚠️ Notice: {impact['message']}")
+
                 gh_config = {"owner": repo_owner, "repo": repo_name, "token": github_token}
                 success, msg = save_user_request(request_text, create_pr=use_pr, gh_config=gh_config)
                 if success:
