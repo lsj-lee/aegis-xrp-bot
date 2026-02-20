@@ -1,3 +1,4 @@
+# AEGIS System v4.0.0 Unified Command
 import os
 import sys
 import time
@@ -58,6 +59,52 @@ def check_pending_proposals():
             print(f"\n🚀 [시스템 진화 감지] {len(proposals)}개의 대기 중인 시스템 업데이트 제안이 있습니다!")
             print(f"👉 'python aegis_system_evolver.py --review' 명령어로 검토 및 승인하세요.")
             print("-" * 65)
+
+def _enter_sleep_mode() -> bool:
+    """
+    Safely triggers system sleep mode (macOS only).
+    Uses 'pmset sleepnow' command.
+    """
+    if sys.platform != "darwin":
+        print_status("⚠️ 절전 모드는 macOS에서만 지원됩니다.", level="WARNING")
+        return False
+
+    print_status(f"🌙 {SLEEP_WAIT_SECONDS}초 후 절전 모드로 진입합니다...")
+    time.sleep(SLEEP_WAIT_SECONDS)
+    return _execute_system_command(MAC_SLEEP_COMMAND, "시스템 절전")
+
+def _execute_system_command(command: list[str], description: str) -> bool:
+    """
+    Executes a generic system command using subprocess.run.
+    Replaces os.system for better control and error handling.
+    
+    Args:
+        command (list[str]): The command and its arguments as a list.
+        description (str): A descriptive message for the command being executed.
+
+    Returns:
+        bool: True if the command executed successfully, False otherwise.
+    """
+    print_status(f"🛠️ {description} 실행 중: {' '.join(command)}")
+    try:
+        result = subprocess.run(command, capture_output=True, text=True, check=False)
+        if result.returncode != 0:
+            print_status(f"⚠️ {description} 실패 (Exit Code: {result.returncode})", level="ERROR")
+            if result.stdout:
+                print_status(f"--- STDOUT ---\n{result.stdout.strip()}", level="ERROR")
+            if result.stderr:
+                print_status(f"--- STDERR ---\n{result.stderr.strip()}", level="ERROR")
+            return False
+        else:
+            print_status(f"✅ {description} 성공.")
+            # For system commands, often stdout is empty on success or not critical to show.
+            return True
+    except FileNotFoundError:
+        print_status(f"⚠️ 명령어 '{command[0]}'을(를) 찾을 수 없습니다. 경로 설정 또는 설치 여부를 확인하세요.", level="ERROR")
+        return False
+    except Exception as e:
+        print_status(f"⚠️ 예기치 못한 오류 발생 ({description}): {e}", level="ERROR")
+        return False
 
 def _execute_pipeline_step(script_name: str, step_msg: str) -> bool:
     """
@@ -199,11 +246,16 @@ def run_pipeline(auto_sleep: bool = False):
     elapsed_minutes = (end_time - start_time) / 60
 
     print("\n=================================================================")
+    print_status(f"✅ 모든 시스템이 성공적으로 완료되었습니다! (총 소요시간: {elapsed_minutes:.1f}분)")
+    print_status("🎯 구글 시트 및 대시보드 데이터(aegis_dashboard_data.json) 업데이트 완료.")
+    print_status("🖥️  'streamlit run aegis_dashboard.py' 명령어로 커맨드 센터를 실행하세요.")
     print(f"✅ 모든 시스템이 성공적으로 완료되었습니다! (총 소요시간: {elapsed_minutes:.1f}분)")
     print("🎯 이제 구글 시트에서 AI의 '오늘자 성적표'를 확인하세요.")
     print("=================================================================")
 
     if auto_sleep:
+        if not _enter_sleep_mode():
+            print_status("⚠️ 자동 절전 모드 전환에 실패했습니다. 수동으로 전환해주세요.", level="WARNING")
         _enter_sleep_mode()
     else:
         print("\n✨ 시스템이 종료되었습니다. (자동 수면 모드 미실행)")
