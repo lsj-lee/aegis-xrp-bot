@@ -146,8 +146,71 @@ def merge_pr(owner, repo, pr_number, token):
     except Exception as e:
         return False, str(e)
 
-def save_user_request(request_text, image_filename=None):
-    """사용자 요청사항을 파일에 저장하고 Git Push 수행"""
+def create_pr_from_changes(owner, repo, token, files_to_add, commit_msg, pr_title, pr_body):
+    """
+    새로운 브랜치를 생성하고 변경사항을 커밋/푸시한 후 PR을 생성합니다.
+    """
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    branch_name = f"cmd/order-{timestamp}"
+    original_branch = "main" # Default fallback
+
+    try:
+        # 0. 현재 브랜치 확인
+        res = subprocess.run(["git", "rev-parse", "--abbrev-ref", "HEAD"], capture_output=True, text=True)
+        if res.returncode == 0:
+            original_branch = res.stdout.strip()
+
+        # 1. 브랜치 생성 및 이동
+        subprocess.run(["git", "checkout", "-b", branch_name], check=True, capture_output=True)
+
+        # 2. Add & Commit
+        subprocess.run(["git", "add"] + files_to_add, check=True, capture_output=True)
+        subprocess.run(["git", "commit", "-m", commit_msg], check=True, capture_output=True)
+
+        # 3. Push
+        subprocess.run(["git", "push", "origin", branch_name], check=True, capture_output=True)
+
+        # 4. PR 생성 API 호출
+        # 기본 브랜치 확인
+        repo_url = f"https://api.github.com/repos/{owner}/{repo}"
+        headers = {
+            "Authorization": f"token {token}",
+            "Accept": "application/vnd.github.v3+json"
+        }
+
+        default_branch = "main"
+        try:
+            repo_info = requests.get(repo_url, headers=headers).json()
+            default_branch = repo_info.get("default_branch", "main")
+        except:
+            pass
+
+        url = f"https://api.github.com/repos/{owner}/{repo}/pulls"
+        payload = {
+            "title": pr_title,
+            "body": pr_body,
+            "head": branch_name,
+            "base": default_branch
+        }
+
+        resp = requests.post(url, headers=headers, json=payload)
+
+        # 5. 원래 브랜치 복귀
+        subprocess.run(["git", "checkout", original_branch], check=True, capture_output=True)
+
+        if resp.status_code == 201:
+            pr_data = resp.json()
+            return True, f"PR 생성 성공: #{pr_data['number']} {pr_data['html_url']}"
+        else:
+            return False, f"PR 생성 실패 ({resp.status_code}): {resp.text}"
+
+    except Exception as e:
+        # 오류 발생 시 원래 브랜치로 복구 시도
+        subprocess.run(["git", "checkout", original_branch], capture_output=True)
+        return False, f"PR 프로세스 중 오류: {str(e)}"
+
+def save_user_request(request_text, image_filename=None, create_pr=False, gh_config=None):
+    """사용자 요청사항을 파일에 저장하고 Git Push 또는 PR 생성 수행"""
     timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     entry = f"[{timestamp}] {request_text}"
     if image_filename:
@@ -159,17 +222,29 @@ def save_user_request(request_text, image_filename=None):
         with open(USER_REQUESTS_FILE, "a", encoding="utf-8") as f:
             f.write(entry)
 
-        # Git Push 자동화
         files_to_sync = [USER_REQUESTS_FILE]
         if image_filename:
-            files_to_sync.append(COMMAND_IMAGES_DIR) # 폴더 전체 추가 (이미지 포함)
+            files_to_sync.append(COMMAND_IMAGES_DIR)
 
+        # PR 생성 모드
+        if create_pr and gh_config and gh_config.get("token"):
+             return create_pr_from_changes(
+                gh_config["owner"],
+                gh_config["repo"],
+                gh_config["token"],
+                files_to_sync,
+                f"Command: {request_text[:30]}...",
+                f"Commander Order: {request_text[:30]}...",
+                f"Request Details:\n{request_text}"
+             )
+
+        # 기존 직접 Push 모드
         success, msg = git_push_changes(files_to_sync, f"Command: {request_text[:30]}...")
 
         if success:
              return True, "명령 저장 및 Git Push 완료"
         else:
-             return True, f"명령은 저장되었으나 Git Push 실패: {msg}" # 파일 저장은 성공했으므로 True 반환하지만 경고 메시지 포함
+             return True, f"명령은 저장되었으나 Git Push 실패: {msg}"
 
     except Exception as e:
         return False, f"저장 중 오류: {str(e)}"
@@ -576,10 +651,10 @@ def main():
                 init_token = config.get("github_token", "")
 
                 with col1:
-                    repo_owner = st.text_input("GitHub Owner", value=init_owner)
-                    repo_name = st.text_input("Repository Name", value=init_repo)
+                    repo_owner = st.text_input("GitHub Owner", value=init_owner).strip()
+                    repo_name = st.text_input("Repository Name", value=init_repo).strip()
                 with col2:
-                    github_token = st.text_input("GitHub Token (PAT)", value=init_token, type="password", help="repo 권한이 있는 Personal Access Token 입력")
+                    github_token = st.text_input("GitHub Token (PAT)", value=init_token, type="password", help="repo 권한이 있는 Personal Access Token 입력").strip()
 
                 # [수정] 설정 저장 버튼
                 if st.button("💾 설정 저장 (Save Config)"):
@@ -630,7 +705,7 @@ def main():
                     if error:
                         st.error(error)
                     elif not prs:
-                        st.info("✅ 현재 열려 있는 PR이 없습니다.")
+                        st.info(f"✅ '{repo_owner}/{repo_name}' 저장소에 현재 열려 있는 PR이 없습니다.")
                     else:
                         st.session_state['prs'] = prs
 
@@ -668,10 +743,17 @@ def main():
 
             with st.form("commander_request_form"):
                 request_text = st.text_area("💡 추가 변경/요청 사항 입력", placeholder="예: 예약 시간을 5분 단위로 더 쪼개줘.", height=100)
+
+                # [수정] PR 생성 옵션 추가
+                use_pr = st.checkbox("Pull Request 생성 (권장)", value=True, help="체크 시, 변경 사항을 바로 반영하지 않고 PR을 생성하여 승인 절차를 거칩니다.")
+
                 submit_request = st.form_submit_button("📩 명령 전송 (Send Command)")
 
             if submit_request and request_text:
-                success, msg = save_user_request(request_text)
+                # GitHub 설정 전달
+                gh_config = {"owner": repo_owner, "repo": repo_name, "token": github_token}
+
+                success, msg = save_user_request(request_text, create_pr=use_pr, gh_config=gh_config)
                 if success:
                     st.success(f"✅ {msg}")
                 else:
