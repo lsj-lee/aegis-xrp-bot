@@ -8,7 +8,7 @@ import time
 
 # --- Configuration ---
 st.set_page_config(
-    page_title="AEGIS COMMAND CENTER",
+    page_title="AEGIS 커맨드 센터",
     page_icon="🛡️",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -70,51 +70,50 @@ def load_data():
         with open(DATA_FILE, "r", encoding="utf-8") as f:
             return json.load(f)
     except Exception as e:
-        st.error(f"Error loading data: {e}")
+        st.error(f"데이터 로드 중 오류 발생: {e}")
         return None
 
 def load_logs(lines=50):
     if not os.path.exists(LOG_FILE):
-        return "Log file not found."
+        return "로그 파일이 없습니다."
     try:
         # Read last N lines using a simpler approach for stability
         with open(LOG_FILE, "r", encoding="utf-8") as f:
             all_lines = f.readlines()
             return "".join(all_lines[-lines:])
     except Exception as e:
-        return f"Error reading logs: {e}"
+        return f"로그 읽기 중 오류 발생: {e}"
 
 # --- Dashboard Layout ---
 
 # Sidebar
 with st.sidebar:
-    st.title("🛡️ AEGIS SYSTEM")
+    st.title("🛡️ AEGIS 시스템")
     st.markdown("---")
 
     # System Status Mockup
-    st.subheader("System Status")
+    st.subheader("시스템 상태")
 
     # Check if a python process related to aegis is running
-    # This is a simple check, might need refinement for exact process matching
     is_running = os.popen("pgrep -f aegis_main_system.py").read().strip()
     if is_running:
-        st.success("🟢 ONLINE")
+        st.success("🟢 가동 중 (ONLINE)")
     else:
-        st.error("🔴 OFFLINE")
+        st.error("🔴 정지 (OFFLINE)")
 
     st.markdown("---")
-    if st.button("🔄 REFRESH DASHBOARD"):
+    if st.button("🔄 대시보드 새로고침"):
         st.rerun()
 
-    st.markdown("### Manual Override")
-    if st.button("🚀 TRIGGER ANALYSIS"):
+    st.markdown("### 수동 제어")
+    if st.button("🚀 분석 강제 실행"):
         # Run in background
         os.system("python aegis_main_system.py &")
-        st.toast("System started in background...", icon="🚀")
+        st.toast("시스템이 백그라운드에서 실행되었습니다...", icon="🚀")
 
 # Main Content
-st.title("AEGIS COMMAND CENTER")
-st.markdown(f"**Last Updated:** {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+st.title("AEGIS 커맨드 센터")
+st.markdown(f"**최종 업데이트:** {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
 data = load_data()
 
@@ -123,16 +122,17 @@ if data:
     col1, col2, col3, col4 = st.columns(4)
 
     with col1:
-        st.metric("Price (USD)", f"${data.get('price', 0):.4f}")
+        st.metric("현재가 (USD)", f"${data.get('price', 0):.4f}")
     with col2:
         prob = data.get('prob', 0)
-        st.metric("AI Probability", f"{prob:.2f}%", delta_color="normal" if prob > 50 else "inverse")
+        st.metric("AI 상승 확률", f"{prob:.2f}%", delta_color="normal" if prob > 50 else "inverse")
     with col3:
         fng = data.get('fng', 50)
-        st.metric("Fear & Greed", f"{fng}", delta_color="off")
+        st.metric("공포/탐욕 지수", f"{fng}", delta_color="off")
     with col4:
-        judgment = data.get('judgment', 'NEUTRAL')
-        st.metric("Judgment", judgment)
+        judgment_en = data.get('judgment', 'NEUTRAL')
+        judgment_kr = "강세" if judgment_en == "BULLISH" else "약세" if judgment_en == "BEARISH" else "중립"
+        st.metric("AI 판단", judgment_kr)
 
     # --- Charts Row ---
     st.markdown("---")
@@ -144,7 +144,7 @@ if data:
             mode = "gauge+number",
             value = prob,
             domain = {'x': [0, 1], 'y': [0, 1]},
-            title = {'text': "AI Bull Probability"},
+            title = {'text': "AI 상승 확률"},
             gauge = {
                 'axis': {'range': [None, 100], 'tickwidth': 1, 'tickcolor': "white"},
                 'bar': {'color': "#00ff41"},
@@ -166,7 +166,7 @@ if data:
             mode = "gauge+number",
             value = fng,
             domain = {'x': [0, 1], 'y': [0, 1]},
-            title = {'text': "Fear & Greed Index"},
+            title = {'text': "공포/탐욕 지수"},
             gauge = {
                 'axis': {'range': [None, 100], 'tickwidth': 1, 'tickcolor': "white"},
                 'bar': {'color': "#00ff41"},
@@ -198,10 +198,10 @@ if data:
 
             radar_data = {
                 'RSI': data.get('rsi', 50),
-                'L/S Ratio': data.get('ls_ratio', 1.0) * 10, # Scale up for visibility
-                'Funding Rate': data.get('funding_rate', 0) * 1000, # Scale up
-                'Fear Index': data.get('fng', 50),
-                'Prob': data.get('prob', 50)
+                'L/S 비율': data.get('ls_ratio', 1.0) * 10, # Scale up for visibility
+                '펀딩비': data.get('funding_rate', 0) * 1000, # Scale up
+                '공포 지수': data.get('fng', 50),
+                '상승 확률': data.get('prob', 50)
             }
 
             fig_radar = go.Figure(data=go.Scatterpolar(
@@ -221,22 +221,22 @@ if data:
               ),
               paper_bgcolor="rgba(0,0,0,0)",
               font={'color': "white", 'family': "Courier New"},
-              title="Multi-Dimensional Analysis (NDA)"
+              title="다차원 분석 (NDA)"
             )
             st.plotly_chart(fig_radar, use_container_width=True)
         else:
-            st.info("No Advanced Metrics Available")
+            st.info("고급 지표 데이터를 사용할 수 없습니다.")
 
     # --- Tabs ---
-    tab1, tab2, tab3 = st.tabs(["📝 AI REPORT", "💻 SYSTEM LOGS", "💾 RAW DATA"])
+    tab1, tab2, tab3 = st.tabs(["📝 AI 리포트", "💻 시스템 로그", "💾 원본 데이터"])
 
     with tab1:
-        st.markdown("### 🧠 Gemini Insight")
-        report_text = data.get('report', "No report available.")
+        st.markdown("### 🧠 Gemini 인사이트")
+        report_text = data.get('report', "리포트 없음.")
         st.markdown(report_text)
 
     with tab2:
-        st.markdown("### 🖥️ Real-time Logs")
+        st.markdown("### 🖥️ 실시간 로그")
         logs = load_logs()
         st.code(logs, language='bash')
 
@@ -244,7 +244,7 @@ if data:
         st.json(data)
 
 else:
-    st.warning("⚠️ No Dashboard Data Found. Run the AEGIS System first.")
-    if st.button("Initialize System Now"):
+    st.warning("⚠️ 대시보드 데이터가 없습니다. AEGIS 시스템을 먼저 실행하세요.")
+    if st.button("시스템 지금 실행"):
         os.system("python aegis_main_system.py &")
-        st.info("System initializing... please wait and refresh.")
+        st.info("시스템 초기화 중... 잠시 후 새로고침하세요.")
