@@ -138,6 +138,23 @@ def merge_pr(owner, repo, pr_number, token):
     except Exception as e:
         return False, str(e)
 
+def close_pr(owner, repo, pr_number, token):
+    """GitHub API를 통해 PR 닫기 (Close)"""
+    if not token:
+        return False, "GitHub Token이 필요합니다."
+
+    url = f"https://api.github.com/repos/{owner}/{repo}/pulls/{pr_number}"
+    headers = {"Authorization": f"token {token}", "Accept": "application/vnd.github.v3+json"}
+    payload = {"state": "closed"}
+    try:
+        response = requests.patch(url, headers=headers, json=payload)
+        if response.status_code == 200:
+            return True, "PR이 성공적으로 닫혔습니다 (폐기 완료)."
+        else:
+            return False, f"PR 닫기 실패: {response.status_code} - {response.text}"
+    except Exception as e:
+        return False, str(e)
+
 def create_pr_from_changes(owner, repo, token, files_to_add, commit_msg, pr_title, pr_body):
     """
     새로운 브랜치를 생성하고 변경사항을 커밋/푸시한 후 PR을 생성합니다.
@@ -529,6 +546,32 @@ def main():
                                         st.rerun()
                                     else:
                                         st.error(msg)
+
+                                # [PR 닫기 기능]
+                                if st.button(f"🗑️ PR 닫기(Close) (#{pr['number']})", key=f"close_{pr['number']}"):
+                                    st.session_state[f"confirm_close_{pr['number']}"] = True
+
+                            # [안전 장치 연동] - 폐기 확인 팝업
+                            if st.session_state.get(f"confirm_close_{pr['number']}"):
+                                st.warning("⚠️ 이 작전 계획(PR)을 정말 폐기하시겠습니까? (Irreversible Action)")
+                                impact = AegisValidator.analyze_impact(f"Close PR #{pr['number']}")
+                                st.caption(f"🛡️ Aegis Risk Analysis: {impact['message']}")
+
+                                c_conf, c_cancel = st.columns(2)
+                                with c_conf:
+                                    if st.button("확인 (Confirm)", key=f"conf_close_{pr['number']}"):
+                                        success, msg = close_pr(repo_owner, repo_name, pr['number'], github_token)
+                                        if success:
+                                            st.success(f"#{pr['number']} 폐기 완료!")
+                                            del st.session_state['prs'] # 목록 갱신 트리거
+                                            del st.session_state[f"confirm_close_{pr['number']}"]
+                                            st.rerun()
+                                        else:
+                                            st.error(msg)
+                                with c_cancel:
+                                    if st.button("취소 (Cancel)", key=f"cancel_close_{pr['number']}"):
+                                        del st.session_state[f"confirm_close_{pr['number']}"]
+                                        st.rerun()
 
             st.divider()
 
