@@ -3,6 +3,7 @@ import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import os
+import numpy as np
 
 # --- [페이지 설정: 넓은 화면 모드] ---
 st.set_page_config(
@@ -22,47 +23,72 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
+# --- [더미 데이터 생성 함수 (안전장치)] ---
+def create_dummy_data(days=100):
+    """데이터 로드 실패 시 UI 확인을 위한 더미 데이터를 생성합니다."""
+    dates = pd.date_range(end=pd.Timestamp.now(), periods=days, freq='D')
+
+    # 랜덤 워크 가격 생성
+    base_price = 1000
+    changes = np.random.randn(days) * 10
+    closes = base_price + np.cumsum(changes)
+
+    data = {
+        'timestamp': dates,
+        'open': closes + np.random.randn(days) * 5,
+        'high': closes + np.abs(np.random.randn(days) * 10),
+        'low': closes - np.abs(np.random.randn(days) * 10),
+        'close': closes,
+        'volume': np.random.randint(1000, 50000, size=days),
+        'prob': np.random.uniform(40, 90, size=days)  # 40~90% 확률
+    }
+
+    df = pd.DataFrame(data)
+    df.set_index('timestamp', inplace=True)
+    return df
+
 # --- [데이터 로드 함수] ---
 @st.cache_data
 def load_data():
     file_path = 'historical_data_3y.csv'
+
     if not os.path.exists(file_path):
-        st.error(f"❌ 데이터 파일을 찾을 수 없습니다: {file_path}")
-        return pd.DataFrame()
+        return None, f"파일을 찾을 수 없습니다: {file_path}"
 
     try:
-        # 날짜 파싱 및 인덱스 설정
-        df = pd.read_csv(file_path, parse_dates=['Date'], index_col='Date')
+        # CSV 읽기 (헤더 그대로)
+        df = pd.read_csv(file_path)
 
-        # 필수 컬럼 확인 (대소문자 무시 처리 가능성 고려, 여기서는 표준 OHLC 가정)
-        if 'Close' not in df.columns:
-             # Close가 없으면 다른 컬럼으로 대체 시도하거나 에러 처리
-             if 'Price' in df.columns:
-                 df['Close'] = df['Price']
-             else:
-                 st.error("데이터 파일에 'Close' (종가) 컬럼이 없습니다.")
-                 return pd.DataFrame()
+        # 1. 컬럼명 소문자 변환 및 공백 제거
+        df.columns = df.columns.str.strip().str.lower()
 
-        required_cols = ['Open', 'High', 'Low', 'Close', 'Volume']
-        for col in required_cols:
-            if col not in df.columns:
-                # 만약 컬럼이 없으면 Close로 대체하거나 0으로 설정 (에러 방지)
-                if col in ['Open', 'High', 'Low']:
-                    df[col] = df['Close']
-                elif col == 'Volume':
-                    df[col] = 0
+        # 2. 날짜 컬럼 처리 ('date' -> 'timestamp'로 통일)
+        if 'date' in df.columns and 'timestamp' not in df.columns:
+            df.rename(columns={'date': 'timestamp'}, inplace=True)
 
-        # 'prob' (예측 확률/성공률) 컬럼이 없으면 50%로 가정 (시각화 테스트용)
+        # 3. 필수 컬럼 확인
+        required_cols = ['timestamp', 'open', 'high', 'low', 'close', 'volume']
+        missing_cols = [col for col in required_cols if col not in df.columns]
+
+        if missing_cols:
+            # 현재 컬럼 리스트 반환
+            current_cols = list(df.columns)
+            return None, f"필수 컬럼 누락: {missing_cols}. 현재 컬럼: {current_cols}"
+
+        # 4. 인덱스 설정 및 날짜 파싱
+        df['timestamp'] = pd.to_datetime(df['timestamp'])
+        df.set_index('timestamp', inplace=True)
+
+        # 5. 'prob' (예측 확률) 컬럼 처리
         if 'prob' not in df.columns:
-            import numpy as np
-            # 임의의 데이터 생성 (실제 데이터가 없을 경우)
-            df['prob'] = 50 + (df['Close'].pct_change().fillna(0) * 1000)
+            # 임의의 데이터 생성 (실제 데이터가 없을 경우 시각화용)
+            df['prob'] = 50 + (df['close'].pct_change().fillna(0) * 1000)
             df['prob'] = df['prob'].clip(0, 100)
 
-        return df
+        return df, None
+
     except Exception as e:
-        st.error(f"❌ 데이터 로드 중 오류 발생: {e}")
-        return pd.DataFrame()
+        return None, f"데이터 로드 중 치명적 오류: {str(e)}"
 
 # --- [메인 로직] ---
 def main():
@@ -77,8 +103,8 @@ def main():
         "1시간 (1H)": "1h",
         "1일 (1D)": "1D",
         "1주 (1W)": "1W",
-        "1개월 (1M)": "1ME", # Pandas 2.x+ 대응 ('M' -> 'ME')
-        "1년 (1Y)": "1YE"    # Pandas 2.x+ 대응 ('Y' -> 'YE')
+        "1개월 (1M)": "1ME", # Pandas 2.x+ 대응
+        "1년 (1Y)": "1YE"    # Pandas 2.x+ 대응
     }
 
     selected_label = st.sidebar.radio(
@@ -87,23 +113,29 @@ def main():
         index=1 # 기본값: 1일
     )
 
-    # 데이터 로드
-    raw_df = load_data()
+    # 데이터 로드 시도
+    raw_df, error_msg = load_data()
+
+    # 데이터 로드 실패 시 더미 데이터 사용 및 에러 표시
+    if raw_df is None:
+        st.error(f"⚠️ 데이터 로드 실패: {error_msg}")
+        st.warning("🔄 시뮬레이션 모드로 전환합니다 (샘플 데이터 사용).")
+        raw_df = create_dummy_data()
 
     if raw_df.empty:
-        st.warning("데이터가 없습니다. 'historical_data_3y.csv' 파일을 확인해주세요.")
+        st.error("데이터프레임이 비어 있습니다.")
         return
 
     # 2. 데이터 리샘플링 (Resampling)
     rule = timeframe_options[selected_label]
 
-    # 리샘플링 집계 규칙
+    # 리샘플링 집계 규칙 (소문자 키 사용)
     agg_dict = {
-        'Open': 'first',
-        'High': 'max',
-        'Low': 'min',
-        'Close': 'last',
-        'Volume': 'sum',
+        'open': 'first',
+        'high': 'max',
+        'low': 'min',
+        'close': 'last',
+        'volume': 'sum',
         'prob': 'mean' # 예측 확률은 평균으로 집계
     }
 
@@ -125,18 +157,18 @@ def main():
     latest = df_resampled.iloc[-1]
     prev = df_resampled.iloc[-2] if len(df_resampled) > 1 else latest
 
-    # 3. 핵심 지표 (Metrics) - 한국어 패치
+    # 3. 핵심 지표 (Metrics) - 소문자 키 사용
     col1, col2, col3, col4 = st.columns(4)
 
-    price_change = latest['Close'] - prev['Close']
-    price_pct = (price_change / prev['Close']) * 100 if prev['Close'] != 0 else 0
+    price_change = latest['close'] - prev['close']
+    price_pct = (price_change / prev['close']) * 100 if prev['close'] != 0 else 0
 
     with col1:
-        st.metric("현재가 (Close)", f"${latest['Close']:.4f}", f"{price_pct:.2f}%")
+        st.metric("현재가 (Close)", f"${latest['close']:.4f}", f"{price_pct:.2f}%")
     with col2:
-        st.metric("시가 (Open)", f"${latest['Open']:.4f}")
+        st.metric("시가 (Open)", f"${latest['open']:.4f}")
     with col3:
-        st.metric("거래량 (Volume)", f"{int(latest['Volume']):,}")
+        st.metric("거래량 (Volume)", f"{int(latest['volume']):,}")
     with col4:
         st.metric("오늘의 승률 (Avg Prob)", f"{latest['prob']:.1f}%", delta_color="off")
 
@@ -157,10 +189,10 @@ def main():
     # (1) 캔들스틱 차트 (메인)
     fig.add_trace(go.Candlestick(
         x=df_resampled.index,
-        open=df_resampled['Open'],
-        high=df_resampled['High'],
-        low=df_resampled['Low'],
-        close=df_resampled['Close'],
+        open=df_resampled['open'],
+        high=df_resampled['high'],
+        low=df_resampled['low'],
+        close=df_resampled['close'],
         name="가격(OHLC)",
         increasing_line_color='#22C55E', # Green
         decreasing_line_color='#EF4444'  # Red
@@ -196,7 +228,7 @@ def main():
     st.plotly_chart(fig, width="stretch")
 
     st.markdown("---")
-    st.caption("System Status: 🟢 Online | Model: AEGIS v4.0.0 | Data Source: Local CSV")
+    st.caption("System Status: 🟢 Online | Model: AEGIS v4.0.0 | Data Source: Local CSV (or Simulation)")
 
 if __name__ == "__main__":
     main()
