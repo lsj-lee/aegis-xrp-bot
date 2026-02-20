@@ -4,6 +4,8 @@ import datetime
 import argparse
 import glob
 import subprocess
+import json
+import requests
 
 # Try to import google.genai, handle failure gracefully
 try:
@@ -12,6 +14,118 @@ try:
 except ImportError:
     HAS_GEMINI = False
     genai = None
+
+CONFIG_FILE = ".aegis_config.json"
+USER_REQUESTS_FILE = "user_requests.txt"
+
+def load_github_config():
+    """Loads GitHub config from .aegis_config.json."""
+    if not os.path.exists(CONFIG_FILE):
+        return {}
+    try:
+        with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+def read_user_requests():
+    """Reads content from user_requests.txt."""
+    if not os.path.exists(USER_REQUESTS_FILE):
+        return ""
+    try:
+        with open(USER_REQUESTS_FILE, "r", encoding="utf-8") as f:
+            return f.read().strip()
+    except Exception:
+        return ""
+
+def clear_user_requests():
+    """Clears the content of user_requests.txt."""
+    try:
+        with open(USER_REQUESTS_FILE, "w", encoding="utf-8") as f:
+            f.write("")
+    except Exception:
+        pass
+
+def create_pr_for_evolution(owner, repo, token, target_file, new_code, request_content):
+    """
+    Creates a new branch, commits the evolved code, pushes it, and opens a PR.
+    """
+    if not token or not owner or not repo:
+        print("⚠️ GitHub configuration missing. Skipping PR creation.")
+        return False
+
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    branch_name = f"evolution/auto-{timestamp}"
+    original_branch = "main"
+
+    # Shorten request for title
+    title_suffix = request_content.split('\n')[0][:40] if request_content else "Routine Evolution"
+    pr_title = f"🧬 AEGIS Evolution: {title_suffix}"
+    pr_body = f"## Autonomous Evolution Proposal\n\n### Commander's Orders:\n{request_content}\n\n### Changes:\nApplied automated evolution to `{target_file}`."
+
+    try:
+        # Get current branch
+        res = subprocess.run(["git", "rev-parse", "--abbrev-ref", "HEAD"], capture_output=True, text=True)
+        if res.returncode == 0:
+            original_branch = res.stdout.strip()
+
+        print(f"🔄 Initiating PR sequence: {branch_name}")
+
+        # 1. Create and switch to new branch
+        subprocess.run(["git", "checkout", "-b", branch_name], check=True, capture_output=True)
+
+        # 2. Overwrite target file with new code
+        with open(target_file, "w", encoding="utf-8") as f:
+            f.write(new_code)
+
+        # 3. Git Add & Commit
+        subprocess.run(["git", "add", target_file], check=True, capture_output=True)
+        subprocess.run(["git", "commit", "-m", f"Evolve {target_file}: {title_suffix}"], check=True, capture_output=True)
+
+        # 4. Push
+        print(f"⬆️ Pushing branch {branch_name}...")
+        subprocess.run(["git", "push", "origin", branch_name], check=True, capture_output=True)
+
+        # 5. Create PR via API
+        url = f"https://api.github.com/repos/{owner}/{repo}/pulls"
+        headers = {
+            "Authorization": f"token {token}",
+            "Accept": "application/vnd.github.v3+json"
+        }
+
+        # Determine base branch (default to main)
+        base_branch = "main"
+        try:
+             repo_info = requests.get(f"https://api.github.com/repos/{owner}/{repo}", headers=headers).json()
+             base_branch = repo_info.get("default_branch", "main")
+        except:
+             pass
+
+        payload = {
+            "title": pr_title,
+            "body": pr_body,
+            "head": branch_name,
+            "base": base_branch
+        }
+
+        resp = requests.post(url, headers=headers, json=payload)
+
+        # 6. Restore original branch
+        subprocess.run(["git", "checkout", original_branch], check=True, capture_output=True)
+
+        if resp.status_code == 201:
+            data = resp.json()
+            print(f"✅ PR Created Successfully: {data['html_url']}")
+            return True
+        else:
+            print(f"⚠️ PR Creation Failed ({resp.status_code}): {resp.text}")
+            return False
+
+    except Exception as e:
+        print(f"❌ Error during PR creation: {e}")
+        # Attempt to restore
+        subprocess.run(["git", "checkout", original_branch], capture_output=True)
+        return False
 
 def load_api_key():
     """Loads the Gemini API key from .env or environment variables."""
@@ -51,11 +165,20 @@ def evolve_system_file(target_file):
 
     print(f"🧬 Evolving system skeleton: {target_file}...")
 
+    # Load User Requests
+    user_request_content = read_user_requests()
+    user_context = ""
+    if user_request_content:
+        print(f"📝 User Requests Found: {user_request_content}")
+        user_context = f"\n[CRITICAL USER REQUESTS]:\n{user_request_content}\n\nYou MUST address the above user requests in your code evolution."
+
     prompt = f"""
     You are an expert Python AI Architect. Your task is to analyze and improve the following Python system file: '{target_file}'.
 
     [Current Code]:
     {current_code}
+
+    {user_context}
 
     [Goal]:
     Refactor and improve the code to enhance readability, performance, error handling, and modularity.
@@ -130,6 +253,26 @@ def evolve_system_file(target_file):
                 f.write(code_content)
             print(f"✅ Queue Added: {proposal_path}")
             print(f"🚀 Proposal queued. Run 'python aegis_system_evolver.py --review' to inspect.")
+
+            # Automatic PR Creation (If user requests exist)
+            if user_request_content:
+                print("🤖 Auto-executing PR creation based on User Requests...")
+                gh_config = load_github_config()
+                if gh_config:
+                    success = create_pr_for_evolution(
+                        gh_config.get("github_owner"),
+                        gh_config.get("github_repo"),
+                        gh_config.get("github_token"),
+                        target_file,
+                        code_content,
+                        user_request_content
+                    )
+                    if success:
+                        clear_user_requests()
+                        print("🧹 User requests cleared.")
+                else:
+                    print("⚠️ GitHub config not found. Skipping Auto-PR.")
+
         else:
             print("⚠️ Failed to parse Code section from Gemini response.")
 

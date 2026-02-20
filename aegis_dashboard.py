@@ -476,51 +476,6 @@ def main():
         # 사이드바 메뉴 선택
         menu = st.sidebar.radio("메뉴 선택", ["대시보드", "통합 커맨드 센터", "예약 및 스케줄 관리"])
 
-        # [수정] ⚡ 실전 지휘 센터 (최상단)
-        st.sidebar.markdown("---")
-        st.sidebar.subheader("⚡ 실전 지휘 센터")
-
-        # 1. 즉시 분석 시작 버튼 (백그라운드 실행)
-        if st.sidebar.button("🚀 즉시 분석 시작", use_container_width=True):
-             with st.sidebar.status("작전 수행 중... (분석 엔진 가동)", expanded=True) as status:
-                 try:
-                     # aegis_automation.py 실행 (Blocking Call for UX feedback)
-                     process = subprocess.run([sys.executable, "aegis_automation.py"], capture_output=True, text=True)
-                     if process.returncode == 0:
-                         st.sidebar.success("✅ 분석 및 보고 완료!")
-                         with st.sidebar.expander("결과 로그 보기"):
-                             st.code(process.stdout)
-                     else:
-                         st.sidebar.error("❌ 분석 실패")
-                         with st.sidebar.expander("오류 로그 보기"):
-                             st.code(process.stderr)
-                 except Exception as e:
-                     st.sidebar.error(f"실행 오류: {e}")
-                 status.update(label="작전 종료", state="complete")
-
-        # 2. 시스템 업데이트 실행 버튼 (PR 존재 여부에 따른 조건부 활성화)
-        # 조건: st.session_state['prs']에 PR 목록이 있어야 활성화됨.
-        pr_exists = ('prs' in st.session_state and st.session_state['prs'])
-
-        if st.sidebar.button(
-            "🚀 시스템 업데이트 실행",
-            use_container_width=True,
-            disabled=not pr_exists,
-            help="대기 중인 PR이 있을 때만 활성화됩니다."
-        ):
-             with st.sidebar.status("작전 수행 중... (시스템 업데이트)", expanded=True) as status:
-                 # PR 존재 시 실행되는 로직이므로, PR 병합 및 업데이트를 수행하는 것이 논리적이나,
-                 # 기존 '시스템 업데이트' 로직(git pull 등)을 수행하도록 함.
-                 logs = run_update_process(update_code=True, update_data=True, update_model=False)
-                 for log in logs:
-                    if "❌" in log: st.sidebar.error(log)
-                    elif "⚠️" in log: st.sidebar.warning(log)
-                    else: st.sidebar.write(log)
-                 status.update(label="업데이트 완료", state="complete")
-
-        if not pr_exists:
-            st.sidebar.caption("⚠️ 대기 중인 PR이 없어 업데이트 버튼이 비활성화되었습니다.")
-
         # [수정] 사이드바에 상시 노출되는 명령 입력창 추가 (이미지 업로드 포함)
         st.sidebar.markdown("---")
         with st.sidebar.expander("📝 Commander's Log", expanded=False):
@@ -558,6 +513,23 @@ def main():
         if menu == "대시보드":
             st.title("🛡️ AEGIS 대시보드 (XRP-BOT)")
             st.caption("맥북 프로 M5 고성능 최적화 | 실시간 금융 데이터 시각화")
+
+            # [New] 즉시 분석 시작 버튼 (메인 화면 전진 배치)
+            if st.button("🚀 즉시 분석 시작 (Start Immediate Analysis)", use_container_width=True, type="primary"):
+                 with st.status("작전 수행 중... (분석 엔진 가동)", expanded=True) as status:
+                     try:
+                         # aegis_automation.py 실행
+                         process = subprocess.run([sys.executable, "aegis_automation.py"], capture_output=True, text=True)
+                         if process.returncode == 0:
+                             st.success("✅ 분석 및 보고 완료!")
+                             st.rerun() # 데이터 갱신을 위해 리런
+                         else:
+                             st.error("❌ 분석 실패")
+                             with st.expander("오류 로그 보기"):
+                                 st.code(process.stderr)
+                     except Exception as e:
+                         st.error(f"실행 오류: {e}")
+                     status.update(label="작전 종료", state="complete")
 
             # 1. 사이드바: 제어판
             st.sidebar.header("🎛️ 제어판")
@@ -675,6 +647,27 @@ def main():
             fig.update_yaxes(title_text="가격 ($)", autorange=True, row=1, col=1)
             fig.update_yaxes(title_text="성공률 (%)", range=[0, 100], row=2, col=1)
             st.plotly_chart(fig, width="stretch")
+
+            # [New] 분석 결과 리포트 출력 (차트 하단)
+            st.subheader("📑 최신 분석 결과 리포트 (Latest Analysis Report)")
+
+            report_file = "aegis_dashboard_data.json"
+            if os.path.exists(report_file):
+                try:
+                    with open(report_file, "r", encoding="utf-8") as f:
+                        data = json.load(f)
+
+                    report_content = data.get("report", "분석 리포트가 없습니다.")
+                    timestamp = data.get("timestamp", "Unknown")
+
+                    st.caption(f"Report Generated at: {timestamp}")
+                    with st.container(border=True):
+                        st.markdown(report_content)
+                except Exception as e:
+                    st.error(f"리포트 로드 중 오류: {e}")
+            else:
+                st.info("아직 생성된 분석 리포트가 없습니다. 상단의 '즉시 분석 시작' 버튼을 눌러주세요.")
+
             st.markdown("---")
             st.caption("System Status: 🟢 Online | Model: AEGIS v4.0.0 | Data Source: Local CSV (or Simulation)")
 
