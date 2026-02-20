@@ -296,6 +296,20 @@ def clear_aegis_jobs():
 # --- [메인 로직] ---
 def main():
     try:
+        # [Session State 초기화]
+        if 'verification_active' not in st.session_state:
+            st.session_state['verification_active'] = False
+        if 'pending_command' not in st.session_state:
+            st.session_state['pending_command'] = None
+        if 'pending_use_pr' not in st.session_state:
+            st.session_state['pending_use_pr'] = False
+        if 'pending_image' not in st.session_state:
+            st.session_state['pending_image'] = None
+        if 'pending_source' not in st.session_state:
+            st.session_state['pending_source'] = None
+        if 'pending_gh_config' not in st.session_state:
+            st.session_state['pending_gh_config'] = None
+
         st.sidebar.title("🛡️ AEGIS SYSTEM")
 
         # 사이드바 메뉴 선택
@@ -319,16 +333,73 @@ def main():
                             save_path = os.path.join(COMMAND_IMAGES_DIR, image_filename)
                             with open(save_path, "wb") as f:
                                 f.write(uploaded_file.getbuffer())
-                            st.sidebar.success(f"이미지 저장됨: {image_filename}")
+                            st.sidebar.success(f"이미지 업로드됨: {image_filename}")
                         except Exception as e:
-                            st.sidebar.error(f"이미지 저장 실패: {e}")
-                    success, msg = save_user_request(cmd_input if cmd_input else "(이미지 전송)", image_filename)
-                    if success:
-                        st.success(msg)
-                    else:
-                        st.error(msg)
+                            st.sidebar.error(f"이미지 처리 실패: {e}")
+
+                    # [상태 업데이트 -> 검증 모드 진입]
+                    st.session_state['pending_command'] = cmd_input if cmd_input else "(이미지 전송)"
+                    st.session_state['pending_image'] = image_filename
+                    st.session_state['pending_use_pr'] = False # 사이드바는 Direct Push 유지
+                    st.session_state['pending_source'] = 'sidebar'
+                    st.session_state['verification_active'] = True
+                    st.rerun()
                 else:
                     st.warning("내용을 입력하거나 이미지를 첨부하세요.")
+
+        # [검증 대기 모드: Verification Phase]
+        if st.session_state.get('verification_active'):
+            st.divider()
+            with st.container(border=True):
+                st.subheader("⚠️ 작전 검증 대기 중 (Verification Pending)")
+                st.info("줄스 세션에서 먼저 작전 계획을 검토하십시오. 검증이 완료된 후 승인해야 PR이 생성됩니다.")
+                st.markdown("[👉 Google Jules Session 바로가기](https://jules.google.com/session)")
+
+                v_col1, v_col2 = st.columns(2)
+                with v_col1:
+                    if st.button("✅ 검증 완료 (승인 및 실행)", use_container_width=True, type="primary"):
+                        req_text = st.session_state.get('pending_command')
+                        use_pr = st.session_state.get('pending_use_pr')
+                        img_file = st.session_state.get('pending_image')
+
+                        # Config 로드 (저장된 컨텍스트 우선 사용)
+                        gh_config = st.session_state.get('pending_gh_config')
+                        if not gh_config:
+                            config = load_config()
+                            def_owner, def_repo = get_github_repo_info()
+                            gh_config = {
+                                "owner": config.get("github_owner", def_owner),
+                                "repo": config.get("github_repo", def_repo),
+                                "token": config.get("github_token", "")
+                            }
+
+                        success, msg = save_user_request(req_text, image_filename=img_file, create_pr=use_pr, gh_config=gh_config)
+
+                        if success:
+                            st.success(f"✅ {msg}")
+                            # Reset
+                            st.session_state['verification_active'] = False
+                            st.session_state['pending_command'] = None
+                            st.session_state['pending_use_pr'] = False
+                            st.session_state['pending_image'] = None
+                            st.session_state['pending_gh_config'] = None
+                            st.session_state['pending_source'] = None
+                            st.rerun()
+                        else:
+                            st.error(f"❌ {msg}")
+
+                with v_col2:
+                    if st.button("❌ 취소 (작전 폐기)", use_container_width=True):
+                        st.session_state['verification_active'] = False
+                        st.session_state['pending_command'] = None
+                        st.session_state['pending_use_pr'] = False
+                        st.session_state['pending_image'] = None
+                        st.session_state['pending_gh_config'] = None
+                        st.session_state['pending_source'] = None
+                        st.warning("작전이 취소되었습니다.")
+                        st.rerun()
+            st.divider()
+            st.stop() # 이후 렌더링 중단
 
         if menu == "대시보드":
             st.title("🛡️ AEGIS 통합 커맨드 센터 (v2.1 Test)")
@@ -592,12 +663,14 @@ def main():
                 elif impact['risk_level'] == 'Medium':
                     st.warning(f"⚠️ Notice: {impact['message']}")
 
-                gh_config = {"owner": repo_owner, "repo": repo_name, "token": github_token}
-                success, msg = save_user_request(request_text, create_pr=use_pr, gh_config=gh_config)
-                if success:
-                    st.success(f"✅ {msg}")
-                else:
-                    st.error(f"❌ {msg}")
+                # [상태 업데이트 -> 검증 모드 진입]
+                st.session_state['pending_command'] = request_text
+                st.session_state['pending_use_pr'] = use_pr
+                st.session_state['pending_image'] = None # 메인 폼에서는 이미지 첨부 없음
+                st.session_state['pending_gh_config'] = {"owner": repo_owner, "repo": repo_name, "token": github_token}
+                st.session_state['pending_source'] = 'main'
+                st.session_state['verification_active'] = True
+                st.rerun()
 
         elif menu == "예약 및 스케줄 관리":
             st.title("🗓️ 예약 및 스케줄 관리 센터 (Scheduling Center)")
