@@ -6,6 +6,7 @@ import glob
 import subprocess
 import json
 import requests
+from aegis_lib import AegisValidator
 
 # Try to import google.genai, handle failure gracefully
 try:
@@ -275,6 +276,18 @@ def evolve_system_file(target_file):
                 f.write(code_content)
             print(f"✅ Queue Added: {proposal_path}")
             print(f"🚀 Proposal queued. Run 'python aegis_system_evolver.py --review' to inspect.")
+
+            # [Verification Phase] - Strict Critical Thinking Check
+            # Only enforce model structure check if target is related to brain logic
+            is_brain_module = ("brain" in target_file)
+
+            if not AegisValidator.validate_proposal(proposal_path, check_model=is_brain_module):
+                print("🛑 Proposal Verification Failed. Skipping Auto-PR.")
+                # Rename to indicate failure
+                failed_path = proposal_path.replace(".py", "_FAILED.py")
+                os.rename(proposal_path, failed_path)
+                print(f"⚠️ Renamed to: {failed_path}")
+                return
 
             # Automatic PR Creation (If user requests exist)
             if user_request_content:

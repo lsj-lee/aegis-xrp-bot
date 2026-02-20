@@ -4,6 +4,7 @@ import os
 import sys
 import subprocess
 import shutil
+from aegis_lib import AegisValidator
 import numpy as np
 import requests
 import json
@@ -319,6 +320,14 @@ def main():
 
             # 1. [최상단 배치] 즉시 분석 시작 버튼
             if st.button("🚀 즉시 분석 시작 (Start Immediate Analysis)", use_container_width=True, type="primary"):
+                 # [Verification Phase]
+                 impact = AegisValidator.analyze_impact("Start Immediate Analysis")
+                 if impact['risk_level'] == 'High':
+                     st.error(f"🚫 실행 차단됨: {impact['message']}")
+                     st.stop()
+                 elif impact['risk_level'] == 'Medium':
+                     st.warning(impact['message'])
+
                  with st.status("작전 수행 중... (분석 엔진 가동)", expanded=True) as status:
                      try:
                          process = subprocess.run([sys.executable, "aegis_automation.py"], capture_output=True, text=True)
@@ -415,6 +424,14 @@ def main():
                 check_model = st.checkbox("AI 모델 가중치 확인", value=True)
 
             if st.button("🚀 선택 항목 업데이트 실행", type="primary", key="btn_update_system"):
+                # [Command Verification]
+                if check_git and not AegisValidator.validate_command(["git", "pull"]):
+                    st.error("🚫 Git Pull Blocked.")
+                    st.stop()
+                if check_data and not AegisValidator.validate_command([sys.executable, "data_bank_builder.py"]):
+                    st.error("🚫 Data Sync Blocked.")
+                    st.stop()
+
                 with st.status("시스템 업데이트 진행 중...", expanded=True) as status:
                     # 1. Git Pull
                     if check_git:
@@ -524,6 +541,14 @@ def main():
                 submit_request = st.form_submit_button("📩 명령 전송 (Send Command)")
 
             if submit_request and request_text:
+                # [Impact Analysis]
+                impact = AegisValidator.analyze_impact(request_text)
+                if impact['risk_level'] == 'High':
+                    st.error(f"🚫 Critical Risk: {impact['message']}")
+                    st.stop()
+                elif impact['risk_level'] == 'Medium':
+                    st.warning(f"⚠️ Notice: {impact['message']}")
+
                 gh_config = {"owner": repo_owner, "repo": repo_name, "token": github_token}
                 success, msg = save_user_request(request_text, create_pr=use_pr, gh_config=gh_config)
                 if success:
