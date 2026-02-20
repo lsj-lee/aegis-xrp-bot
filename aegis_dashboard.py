@@ -576,10 +576,10 @@ def main():
                 init_token = config.get("github_token", "")
 
                 with col1:
-                    repo_owner = st.text_input("GitHub Owner", value=init_owner)
-                    repo_name = st.text_input("Repository Name", value=init_repo)
+                    repo_owner = st.text_input("GitHub Owner", value=init_owner).strip()
+                    repo_name = st.text_input("Repository Name", value=init_repo).strip()
                 with col2:
-                    github_token = st.text_input("GitHub Token (PAT)", value=init_token, type="password", help="repo 권한이 있는 Personal Access Token 입력")
+                    github_token = st.text_input("GitHub Token (PAT)", value=init_token, type="password", help="repo 권한이 있는 Personal Access Token 입력").strip()
 
                 # [수정] 설정 저장 버튼
                 if st.button("💾 설정 저장 (Save Config)"):
@@ -630,7 +630,7 @@ def main():
                     if error:
                         st.error(error)
                     elif not prs:
-                        st.info("✅ 현재 열려 있는 PR이 없습니다.")
+                        st.info(f"✅ '{repo_owner}/{repo_name}' 저장소에 현재 열려 있는 PR이 없습니다.")
                     else:
                         st.session_state['prs'] = prs
 
