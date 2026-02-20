@@ -511,8 +511,9 @@ def main():
                     st.warning("내용을 입력하거나 이미지를 첨부하세요.")
 
         if menu == "대시보드":
-            st.title("🛡️ AEGIS 대시보드 (XRP-BOT)")
+            st.title("🛡️ AEGIS 통합 커맨드 센터 (v2.1 Test)")
             st.caption("맥북 프로 M5 고성능 최적화 | 실시간 금융 데이터 시각화")
+            st.info(f"🚀 AEGIS 시스템 통신망 테스트 중: 줄스 응답 대기 완료 ({datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')})")
 
             # [New] 즉시 분석 시작 버튼 (메인 화면 전진 배치)
             if st.button("🚀 즉시 분석 시작 (Start Immediate Analysis)", use_container_width=True, type="primary"):
@@ -669,6 +670,30 @@ def main():
                 st.info("아직 생성된 분석 리포트가 없습니다. 상단의 '즉시 분석 시작' 버튼을 눌러주세요.")
 
             st.markdown("---")
+
+            # [New] Mission Status & Log Streaming
+            st.subheader("📡 Mission Status & Live Logs")
+            with st.status("시스템 작전 상황 실시간 모니터링 중...", expanded=True) as status:
+                st.write("✅ 시스템 통신망: 정상")
+                st.write("✅ 데이터 파이프라인: 대기 중")
+
+                # Log Streaming
+                log_file = "aegis_system.log"
+                if os.path.exists(log_file):
+                    try:
+                        with open(log_file, "r", encoding="utf-8") as f:
+                            lines = f.readlines()
+                            last_logs = lines[-3:] if len(lines) >= 3 else lines
+                            st.text("📋 최신 시스템 로그:")
+                            for line in last_logs:
+                                st.code(line.strip(), language="text")
+                    except Exception:
+                        st.warning("로그 파일을 읽을 수 없습니다.")
+                else:
+                    st.info("시스템 로그 파일이 아직 생성되지 않았습니다.")
+
+                status.update(label="작전 수행 대기 중", state="running")
+
             st.caption("System Status: 🟢 Online | Model: AEGIS v4.0.0 | Data Source: Local CSV (or Simulation)")
 
         elif menu == "통합 커맨드 센터":

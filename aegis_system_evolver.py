@@ -163,14 +163,36 @@ def evolve_system_file(target_file):
     with open(target_file, "r", encoding="utf-8") as f:
         current_code = f.read()
 
+    # Load User Requests early to determine target file
+    user_request_content = read_user_requests()
+
+    # [Smart Target Detection]
+    # If the default target is main_system but the user asks for dashboard/evolver, switch target.
+    if target_file == "aegis_main_system.py" and user_request_content:
+        content_lower = user_request_content.lower()
+        if "dashboard" in content_lower or "대시보드" in content_lower:
+            target_file = "aegis_dashboard.py"
+            print(f"🔄 Target switched to '{target_file}' based on user request.")
+        elif "evolver" in content_lower or "시스템 진화" in content_lower:
+            target_file = "aegis_system_evolver.py"
+            print(f"🔄 Target switched to '{target_file}' based on user request.")
+        elif "automation" in content_lower or "오토메이션" in content_lower:
+            target_file = "aegis_automation.py"
+            print(f"🔄 Target switched to '{target_file}' based on user request.")
+
+    if not os.path.exists(target_file):
+        print(f"⚠️ Target file '{target_file}' not found.")
+        return
+
     print(f"🧬 Evolving system skeleton: {target_file}...")
 
-    # Load User Requests
-    user_request_content = read_user_requests()
     user_context = ""
     if user_request_content:
         print(f"📝 User Requests Found: {user_request_content}")
         user_context = f"\n[CRITICAL USER REQUESTS]:\n{user_request_content}\n\nYou MUST address the above user requests in your code evolution."
+
+    with open(target_file, "r", encoding="utf-8") as f:
+        current_code = f.read()
 
     prompt = f"""
     You are an expert Python AI Architect. Your task is to analyze and improve the following Python system file: '{target_file}'.
@@ -258,7 +280,9 @@ def evolve_system_file(target_file):
             if user_request_content:
                 print("🤖 Auto-executing PR creation based on User Requests...")
                 gh_config = load_github_config()
-                if gh_config:
+
+                # Check for valid config
+                if gh_config and gh_config.get("github_token"):
                     success = create_pr_for_evolution(
                         gh_config.get("github_owner"),
                         gh_config.get("github_repo"),
@@ -271,7 +295,7 @@ def evolve_system_file(target_file):
                         clear_user_requests()
                         print("🧹 User requests cleared.")
                 else:
-                    print("⚠️ GitHub config not found. Skipping Auto-PR.")
+                    print("⚠️ GitHub config invalid or missing token. Skipping Auto-PR.")
 
         else:
             print("⚠️ Failed to parse Code section from Gemini response.")
