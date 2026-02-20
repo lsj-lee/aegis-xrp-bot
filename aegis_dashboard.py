@@ -207,7 +207,7 @@ def create_pr_from_changes(owner, repo, token, files_to_add, commit_msg, pr_titl
         subprocess.run(["git", "checkout", original_branch], capture_output=True, text=True)
         return False, f"PR 프로세스 중 오류: {str(e)}"
 
-def save_user_request(request_text, image_filename=None, create_pr=False, gh_config=None):
+def save_user_request(request_text, image_filename=None, create_pr=False, gh_config=None, verification_report=None):
     """사용자 요청사항을 파일에 저장하고 Git Push 또는 PR 생성 수행"""
     timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     entry = f"[{timestamp}] {request_text}"
@@ -224,14 +224,18 @@ def save_user_request(request_text, image_filename=None, create_pr=False, gh_con
             files_to_sync.append(COMMAND_IMAGES_DIR)
 
         if create_pr and gh_config and gh_config.get("token"):
-             return create_pr_from_changes(
+            pr_body = f"Request Details:\n{request_text}"
+            if verification_report:
+                pr_body += f"\n\n---\n{verification_report}"
+
+            return create_pr_from_changes(
                 gh_config["owner"],
                 gh_config["repo"],
                 gh_config["token"],
                 files_to_sync,
                 f"Command: {request_text[:30]}...",
                 f"Commander Order: {request_text[:30]}...",
-                f"Request Details:\n{request_text}"
+                pr_body
              )
 
         success, msg = git_push_changes(files_to_sync, f"Command: {request_text[:30]}...")
@@ -337,13 +341,36 @@ def main():
                         except Exception as e:
                             st.sidebar.error(f"이미지 처리 실패: {e}")
 
-                    # [상태 업데이트 -> 검증 모드 진입]
-                    st.session_state['pending_command'] = cmd_input if cmd_input else "(이미지 전송)"
-                    st.session_state['pending_image'] = image_filename
-                    st.session_state['pending_use_pr'] = False # 사이드바는 Direct Push 유지
-                    st.session_state['pending_source'] = 'sidebar'
-                    st.session_state['verification_active'] = True
-                    st.rerun()
+                    # [상태 업데이트 -> 검증 모드 진입 or 자동 실행]
+                    cmd_text = cmd_input if cmd_input else "(이미지 전송)"
+                    impact = AegisValidator.analyze_impact(cmd_text)
+
+                    if impact['risk_level'] == 'High':
+                        st.session_state['pending_command'] = cmd_text
+                        st.session_state['pending_image'] = image_filename
+                        st.session_state['pending_use_pr'] = False
+                        st.session_state['pending_source'] = 'sidebar'
+                        st.session_state['verification_active'] = True
+                        st.rerun()
+                    else:
+                        st.sidebar.info(f"⚡ [Auto-Verification] Risk: {impact['risk_level']}. Executing...")
+
+                        config = load_config()
+                        def_owner, def_repo = get_github_repo_info()
+                        gh_config = {
+                            "owner": config.get("github_owner", def_owner),
+                            "repo": config.get("github_repo", def_repo),
+                            "token": config.get("github_token", "")
+                        }
+
+                        report = f"## 🛡️ Jules' Automatic Verification Report\n- **Risk Level:** {impact['risk_level']}\n- **Impact Analysis:** {impact['message']}\n- **Status:** Auto-Approved"
+
+                        success, msg = save_user_request(cmd_text, image_filename=image_filename, create_pr=True, gh_config=gh_config, verification_report=report)
+
+                        if success:
+                            st.sidebar.success(f"✅ {msg}")
+                        else:
+                            st.sidebar.error(f"❌ {msg}")
                 else:
                     st.warning("내용을 입력하거나 이미지를 첨부하세요.")
 
@@ -657,20 +684,32 @@ def main():
             if submit_request and request_text:
                 # [Impact Analysis]
                 impact = AegisValidator.analyze_impact(request_text)
+
                 if impact['risk_level'] == 'High':
                     st.error(f"🚫 Critical Risk: {impact['message']}")
-                    st.stop()
-                elif impact['risk_level'] == 'Medium':
-                    st.warning(f"⚠️ Notice: {impact['message']}")
+                    # High Risk -> Force Manual Verification
+                    st.session_state['pending_command'] = request_text
+                    st.session_state['pending_use_pr'] = use_pr
+                    st.session_state['pending_image'] = None
+                    st.session_state['pending_gh_config'] = {"owner": repo_owner, "repo": repo_name, "token": github_token}
+                    st.session_state['pending_source'] = 'main'
+                    st.session_state['verification_active'] = True
+                    st.rerun()
+                else:
+                    # Low/Medium Risk -> Auto Execute
+                    st.info(f"⚡ [Auto-Verification] Risk: {impact['risk_level']}. Executing...")
 
-                # [상태 업데이트 -> 검증 모드 진입]
-                st.session_state['pending_command'] = request_text
-                st.session_state['pending_use_pr'] = use_pr
-                st.session_state['pending_image'] = None # 메인 폼에서는 이미지 첨부 없음
-                st.session_state['pending_gh_config'] = {"owner": repo_owner, "repo": repo_name, "token": github_token}
-                st.session_state['pending_source'] = 'main'
-                st.session_state['verification_active'] = True
-                st.rerun()
+                    gh_config = {"owner": repo_owner, "repo": repo_name, "token": github_token}
+                    report = f"## 🛡️ Jules' Automatic Verification Report\n- **Risk Level:** {impact['risk_level']}\n- **Impact Analysis:** {impact['message']}\n- **Status:** Auto-Approved"
+
+                    # Force PR creation for Auto-Verification audit trail
+                    success, msg = save_user_request(request_text, image_filename=None, create_pr=True, gh_config=gh_config, verification_report=report)
+
+                    if success:
+                        st.success(f"✅ {msg}")
+                        st.rerun()
+                    else:
+                        st.error(f"❌ {msg}")
 
         elif menu == "예약 및 스케줄 관리":
             st.title("🗓️ 예약 및 스케줄 관리 센터 (Scheduling Center)")
