@@ -476,6 +476,51 @@ def main():
         # 사이드바 메뉴 선택
         menu = st.sidebar.radio("메뉴 선택", ["대시보드", "통합 커맨드 센터", "예약 및 스케줄 관리"])
 
+        # [수정] ⚡ 실전 지휘 센터 (최상단)
+        st.sidebar.markdown("---")
+        st.sidebar.subheader("⚡ 실전 지휘 센터")
+
+        # 1. 즉시 분석 시작 버튼 (백그라운드 실행)
+        if st.sidebar.button("🚀 즉시 분석 시작", use_container_width=True):
+             with st.sidebar.status("작전 수행 중... (분석 엔진 가동)", expanded=True) as status:
+                 try:
+                     # aegis_automation.py 실행 (Blocking Call for UX feedback)
+                     process = subprocess.run([sys.executable, "aegis_automation.py"], capture_output=True, text=True)
+                     if process.returncode == 0:
+                         st.sidebar.success("✅ 분석 및 보고 완료!")
+                         with st.sidebar.expander("결과 로그 보기"):
+                             st.code(process.stdout)
+                     else:
+                         st.sidebar.error("❌ 분석 실패")
+                         with st.sidebar.expander("오류 로그 보기"):
+                             st.code(process.stderr)
+                 except Exception as e:
+                     st.sidebar.error(f"실행 오류: {e}")
+                 status.update(label="작전 종료", state="complete")
+
+        # 2. 시스템 업데이트 실행 버튼 (PR 존재 여부에 따른 조건부 활성화)
+        # 조건: st.session_state['prs']에 PR 목록이 있어야 활성화됨.
+        pr_exists = ('prs' in st.session_state and st.session_state['prs'])
+
+        if st.sidebar.button(
+            "🚀 시스템 업데이트 실행",
+            use_container_width=True,
+            disabled=not pr_exists,
+            help="대기 중인 PR이 있을 때만 활성화됩니다."
+        ):
+             with st.sidebar.status("작전 수행 중... (시스템 업데이트)", expanded=True) as status:
+                 # PR 존재 시 실행되는 로직이므로, PR 병합 및 업데이트를 수행하는 것이 논리적이나,
+                 # 기존 '시스템 업데이트' 로직(git pull 등)을 수행하도록 함.
+                 logs = run_update_process(update_code=True, update_data=True, update_model=False)
+                 for log in logs:
+                    if "❌" in log: st.sidebar.error(log)
+                    elif "⚠️" in log: st.sidebar.warning(log)
+                    else: st.sidebar.write(log)
+                 status.update(label="업데이트 완료", state="complete")
+
+        if not pr_exists:
+            st.sidebar.caption("⚠️ 대기 중인 PR이 없어 업데이트 버튼이 비활성화되었습니다.")
+
         # [수정] 사이드바에 상시 노출되는 명령 입력창 추가 (이미지 업로드 포함)
         st.sidebar.markdown("---")
         with st.sidebar.expander("📝 Commander's Log", expanded=False):
@@ -667,7 +712,11 @@ def main():
             st.divider()
 
             # --- [섹션 1: 시스템 업데이트] ---
+            # 사이드바에 기능을 이전했으므로 메인 화면에서는 제거하거나 중복 배치 가능.
+            # UX상 중복 배치는 혼란을 줄 수 있으나, 상세 옵션(체크박스) 제어는 메인에 남겨두는 것이 좋음.
             st.subheader("1️⃣ 시스템 업데이트 (Update Center)")
+            st.info("💡 사이드바의 '🚀 시스템 업데이트 실행' 버튼을 통해서도 즉시 실행할 수 있습니다.")
+
             with st.form("update_form"):
                 col1, col2, col3 = st.columns(3)
                 with col1:
