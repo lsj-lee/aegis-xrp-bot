@@ -27,11 +27,18 @@ def parse_gemini_report(full_report):
         # However, to be safe, we regex for the bracketed part and optional colon.
 
         # We need the positions of these headers
-        target_match = re.search(r"\[🎯 타점 분석\]:?", full_report)
-        chain_match = re.search(r"\[🧠 AEGIS 사고의 사슬\]:?", full_report)
-        evol_match = re.search(r"\[🧬 에이지스 진화 연구\]:?", full_report)
-        code_match = re.search(r"\[💻 진화 코드 제안\]:?", full_report)
-        action_match = re.search(r"\[🔥 최종 액션 플랜\]:?", full_report)
+        # Updated for AEGIS 4.1 Unified Report Format
+        target_match = re.search(r"\[A\. Local Brain\]", full_report)
+        chain_match = re.search(r"\[B\. Gemini Reasoning\]", full_report)
+        action_match = re.search(r"\[C\. Unified Command\]", full_report)
+
+        # Legacy fallback headers (just in case)
+        if not target_match:
+            target_match = re.search(r"\[🎯 타점 분석\]:?", full_report)
+        if not chain_match:
+            chain_match = re.search(r"\[🧠 AEGIS 사고의 사슬\]:?", full_report)
+        if not action_match:
+            action_match = re.search(r"\[🔥 최종 액션 플랜\]:?", full_report)
 
         # Helper to get content between two indices
         def get_text(start_match, end_match):
@@ -41,49 +48,23 @@ def parse_gemini_report(full_report):
                 return full_report[start_match.start():].strip()
             return ""
 
-        # [Target Analysis]
-        # Includes the pre-Gemini "Code Analysis" block + Gemini's Target Analysis
-        if target_match:
-            # Code Analysis is everything before the first Gemini Target header
-            # Wait, `run_daily_execution` puts `code_analysis` first.
-            # `code_analysis` starts with `[🎯 타점 분석] & ...`.
-            # Gemini starts with `[🎯 타점 분석]:` (colon).
-            # If we find the COLON version, we assume it's Gemini.
+        # [Target Analysis] -> [A. Local Brain]
+        sections['target'] = get_text(target_match, chain_match)
 
-            gemini_start_idx = target_match.start()
+        # [Chain of Thought] -> [B. Gemini Reasoning]
+        sections['chain'] = get_text(chain_match, action_match)
 
-            # If the match is actually the Code Analysis header (no colon, or colon absent in regex?),
-            # we need to be careful. Code Analysis header: `[🎯 타점 분석] & [🤖 DNN & 선물 지표]`
-            # Gemini header: `[🎯 타점 분석]:`
-
-            # Let's search specifically for the Gemini one with Colon first
-            gemini_target_match = re.search(r"\[🎯 타점 분석\]:", full_report)
-
-            if gemini_target_match:
-                # Code Analysis is before this
-                code_analysis = full_report[:gemini_target_match.start()].strip()
-                # Gemini Target is from here to Chain
-                gemini_target = get_text(gemini_target_match, chain_match)
-
-                sections['target'] = f"{code_analysis}\n\n{gemini_target}"
-            else:
-                # Fallback: Treat everything up to Chain as Target
-                sections['target'] = get_text(target_match, chain_match)
-        else:
-             sections['target'] = full_report # Worst case
-
-        # [Chain of Thought]
-        sections['chain'] = get_text(chain_match, evol_match)
+        # [Action Plan] -> [C. Unified Command]
+        sections['action'] = get_text(action_match, None) # To end
 
         # [Evolution Research]
-        # Excludes Code Proposal if present
-        if code_match:
-            sections['evolution'] = get_text(evol_match, code_match)
+        # Try to extract "Evolution ($CC$)" from [C. Unified Command]
+        # Look for "Evolution ($CC$):" or similar
+        evol_cc_match = re.search(r"Evolution \(\$CC\):|진화 \(\$CC\):", sections['action'])
+        if evol_cc_match:
+            sections['evolution'] = sections['action'][evol_cc_match.start():].strip()
         else:
-            sections['evolution'] = get_text(evol_match, action_match)
-
-        # [Action Plan]
-        sections['action'] = get_text(action_match, None) # To end
+            sections['evolution'] = "Refer to Unified Command [C]"
 
         # [Decision Extraction]
         # Look for 강세/약세/중립 in Action Plan

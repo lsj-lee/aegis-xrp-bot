@@ -150,8 +150,20 @@ def calculate_rsi(data, window=14):
     rs = gain / loss
     return 100 - (100 / (1 + rs))
 
-def get_gemini_insight(data_dict, am):
-    if not client: return "[🧠 AI 직관] Client 초기화 실패."
+def get_gemini_insight(data_dict, am, local_analysis_text):
+    # Fallback format if Gemini is unavailable
+    fallback_report = f"""
+[A. Local Brain]
+{local_analysis_text}
+
+[B. Gemini Reasoning]
+⚠️ Gemini API Unavailable (Client Init Failed)
+
+[C. Unified Command]
+⚠️ Analysis Incomplete
+"""
+    if not client: return fallback_report
+
     try:
         # [Step 1: Quantitative Logic (English)] - Deep Reasoning
         prompt_step_1 = f"""
@@ -200,31 +212,46 @@ def get_gemini_insight(data_dict, am):
         except Exception as e:
             print(f"⚠️ Failed to save evolution code: {e}")
 
-        # [Step 3: Final Rigid Assembly (Korean Output)]
+        # [Step 3: Multi-Timeframe Strategy (Unified Report)]
         final_prompt = f"""
-        You are 'AEGIS 4.0'. Synthesize the following inputs into a formal Korean report.
+        You are 'AEGIS 4.1'. Synthesize the following inputs into a formal Korean 'Unified Intelligence Synthesis' report.
 
-        Strict Rules:
-        1. Use ONLY Korean for headings.
-        2. You MUST include the literal formulas $NDA$ and $TE$ in the text and explain their values derived in Step 1.
-        3. Strictly Include all technical details from the research/code section.
-        4. Do NOT summarize generally; be specific about the formulas and code architecture.
+        Strict Formatting Rules:
+        1. Use ONLY the specified headers: [A. Local Brain], [B. Gemini Reasoning], [C. Unified Command].
+        2. [A. Local Brain]: Integrate the 'Local Analysis Context' provided below. Do not change the numbers, but present them clearly.
+        3. [B. Gemini Reasoning]:
+           - Provide 'Cloud Contextual Verification': Compare the Local stats (Step 1) with real-time market news and macro indicators you know.
+           - Discuss consistency or divergence (e.g., "Local model sees Bullish, but News is Bearish...").
+           - Explain the $NDA$ and $TE$ formulas calculated in Step 1.
+        4. [C. Unified Command]:
+           - Prediction ($TE$): Short-term (24h), Mid-term (1w), Long-term (1Q).
+           - Position ($S$): Buy/Sell/Hold decision and detailed strategy.
+           - Evolution ($CC$): Propose ONE specific system improvement idea based on the Code Generation in Step 2 (do not print the full code here, just the concept).
+        5. Use Korean for the content.
 
-        [Input Analysis from Step 1]: {res_1}
-        [Input Code from Step 2]: {res_2}
+        [Local Analysis Context (M5 Engine)]:
+        {local_analysis_text}
 
-        REPORT STRUCTURE (Mandatory):
-        [🎯 타점 분석]: Summarize price levels and market alerts based on the stats provided.
-        [🧠 AEGIS 사고의 사슬]: Translate the Step 1 reasoning into Korean. Explicitly show the $NDA$ and $TE$ formulas and their calculated implications for the current market state (F&G {data_dict['fng']}). Mention 'Frog Strategy' if relevant.
-        [🧬 에이지스 진화 연구]: Explain the architectural improvements in the generated code (Step 2) in detail (Korean). Discuss why Transformer/TFT is better than simple DNN for this data.
-        [💻 진화 코드 제안]: Display the 'AegisEvolution' class code from Step 2 verbatim.
-        [🔥 최종 액션 플랜]: Conclusion (강세/약세/중립), Confidence Level (%), and 4 specific actionable strategies.
+        [Quantitative Logic (Step 1)]:
+        {res_1}
+
+        [Evolution Code Concept (Step 2)]:
+        {res_2}
         """
         response = client.models.generate_content(model='gemini-2.5-flash', contents=final_prompt)
 
         return response.text.strip() if response.text else "Output Blocked by Safety Filter."
     except Exception as e:
-        return f"[🧠 AI 직관] 분석 실패: {e}"
+        return f"""
+[A. Local Brain]
+{local_analysis_text}
+
+[B. Gemini Reasoning]
+⚠️ Gemini Analysis Failed: {e}
+
+[C. Unified Command]
+⚠️ Analysis Incomplete
+"""
 
 def run_daily_execution():
     print("🔮 [AEGIS 4.0 Evolution & Gemini 하이브리드 - 보안 모드 가동]")
@@ -380,7 +407,8 @@ def run_daily_execution():
     # Convert latest_data row to dict for Gemini
     advanced_metrics = latest_data.to_dict(orient='records')[0]
 
-    gemini_analysis = get_gemini_insight(analysis_data, advanced_metrics)
+    # Pass the local code analysis text to Gemini for unified reporting
+    gemini_analysis = get_gemini_insight(analysis_data, advanced_metrics, code_analysis)
 
     # 💾 Save Dashboard Data (Command Center)
     dashboard_data = {
@@ -393,7 +421,7 @@ def run_daily_execution():
         'rsi': rsi_val,
         'advanced_metrics': advanced_metrics,
         'judgment': "BULLISH" if prob_percent > 60 else "BEARISH" if prob_percent < 40 else "NEUTRAL",
-        'report': f"{code_analysis}\n\n{gemini_analysis}"
+        'report': gemini_analysis  # Full Unified Report
     }
     try:
         with open('aegis_dashboard_data.json', 'w', encoding='utf-8') as f:
@@ -404,7 +432,7 @@ def run_daily_execution():
     return {
         'date': end_date, 'price': current_price, 'fng': current_fng,
         'prob': prob_percent, 'decision': "분석 완료", 'long_term': analysis_data['long_term'],
-        'commentary': f"{code_analysis}\n\n{gemini_analysis}"
+        'commentary': gemini_analysis
     }
 
 if __name__ == "__main__":
