@@ -22,6 +22,7 @@ st.set_page_config(
 # --- [전역 상수] ---
 CONFIG_FILE = ".aegis_config.json"
 COMMAND_IMAGES_DIR = "command_images"
+USER_REQUESTS_FILE = "user_requests.txt"
 
 # --- [스타일링: 다크 테마 및 커스텀 CSS] ---
 st.markdown("""
@@ -60,6 +61,36 @@ def save_config(owner, repo, token):
         return True, "설정이 성공적으로 저장되었습니다."
     except Exception as e:
         return False, f"설정 저장 실패: {str(e)}"
+
+# --- [Git 자동화 유틸리티] ---
+def git_push_changes(files_to_add, commit_message):
+    """
+    지정된 파일들을 git add, commit, push 합니다.
+    :param files_to_add: 리스트 형태의 파일 경로 (예: ['user_requests.txt', 'command_images/'])
+    :param commit_message: 커밋 메시지
+    """
+    logs = []
+    try:
+        # 1. Add
+        subprocess.run(["git", "add"] + files_to_add, check=True, capture_output=True)
+        logs.append(f"Git Add: {files_to_add}")
+
+        # 2. Commit
+        subprocess.run(["git", "commit", "-m", commit_message], check=True, capture_output=True)
+        logs.append(f"Git Commit: {commit_message}")
+
+        # 3. Push
+        result = subprocess.run(["git", "push"], check=True, capture_output=True, text=True)
+        logs.append("Git Push: Success")
+        return True, "\n".join(logs)
+
+    except subprocess.CalledProcessError as e:
+        # Commit 할 것이 없는 경우 (Clean working tree) 등
+        if "nothing to commit" in str(e.stdout) or "nothing to commit" in str(e.stderr):
+             return True, "변경 사항이 없어 커밋하지 않았습니다."
+        return False, f"Git 명령 오류: {e.stderr.decode('utf-8') if e.stderr else str(e)}"
+    except Exception as e:
+        return False, f"Git 실행 중 오류: {str(e)}"
 
 # --- [GitHub API 유틸리티 함수] ---
 def get_github_repo_info():
@@ -116,7 +147,7 @@ def merge_pr(owner, repo, pr_number, token):
         return False, str(e)
 
 def save_user_request(request_text, image_filename=None):
-    """사용자 요청사항을 파일에 저장 (이미지 포함)"""
+    """사용자 요청사항을 파일에 저장하고 Git Push 수행"""
     timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     entry = f"[{timestamp}] {request_text}"
     if image_filename:
@@ -124,11 +155,24 @@ def save_user_request(request_text, image_filename=None):
     entry += "\n"
 
     try:
-        with open("user_requests.txt", "a", encoding="utf-8") as f:
+        # 파일 저장
+        with open(USER_REQUESTS_FILE, "a", encoding="utf-8") as f:
             f.write(entry)
-        return True
+
+        # Git Push 자동화
+        files_to_sync = [USER_REQUESTS_FILE]
+        if image_filename:
+            files_to_sync.append(COMMAND_IMAGES_DIR) # 폴더 전체 추가 (이미지 포함)
+
+        success, msg = git_push_changes(files_to_sync, f"Command: {request_text[:30]}...")
+
+        if success:
+             return True, "명령 저장 및 Git Push 완료"
+        else:
+             return True, f"명령은 저장되었으나 Git Push 실패: {msg}" # 파일 저장은 성공했으므로 True 반환하지만 경고 메시지 포함
+
     except Exception as e:
-        return False
+        return False, f"저장 중 오류: {str(e)}"
 
 # --- [스케줄링 유틸리티 함수] ---
 def get_current_crontab():
@@ -219,11 +263,26 @@ def load_data():
 
     # 레거시 경로 확인 (업데이트 후 복사되지 않았을 경우 대비)
     legacy_path = os.path.expanduser("~/Desktop/xrp_research/historical_data_3y.csv")
-    if not os.path.exists(file_path) and os.path.exists(legacy_path):
-        try:
-            shutil.copy(legacy_path, file_path)
-        except:
-            pass
+
+    # [수정] os.path.samefile을 사용하여 안전하게 파일 비교 및 복사
+    try:
+        if os.path.exists(legacy_path):
+             # 대상 파일이 없거나, 있는데 서로 다른 파일인 경우 복사 시도
+             should_copy = False
+             if not os.path.exists(file_path):
+                 should_copy = True
+             else:
+                 try:
+                     if not os.path.samefile(legacy_path, file_path):
+                         should_copy = True
+                 except OSError:
+                     # 파일 접근 권한 등의 문제로 비교 불가 시 안전하게 복사 시도
+                     should_copy = True
+
+             if should_copy:
+                 shutil.copy(legacy_path, file_path)
+    except Exception:
+        pass # 복사 실패해도 로컬 파일 로드 시도
 
     if not os.path.exists(file_path):
         return None, f"파일을 찾을 수 없습니다: {file_path}"
@@ -302,19 +361,15 @@ def run_update_process(update_code, update_data, update_model):
                 legacy_path = os.path.expanduser("~/Desktop/xrp_research/historical_data_3y.csv")
                 local_path = "historical_data_3y.csv"
 
-                # [수정] SameFileError 방지 및 경로 확인
+                # [수정] SameFileError 방지 및 os.path.samefile 사용
                 if os.path.exists(legacy_path):
                     try:
-                        abs_legacy = os.path.abspath(legacy_path)
-                        abs_local = os.path.abspath(local_path)
-
-                        if abs_legacy == abs_local:
-                             logs.append("ℹ️ 데이터 파일이 이미 최신 위치에 있습니다 (원본과 대상 경로 동일).")
+                        # 파일이 존재하고 서로 다른 파일인 경우에만 복사
+                        if not os.path.exists(local_path) or not os.path.samefile(legacy_path, local_path):
+                             shutil.copy(legacy_path, local_path)
+                             logs.append(f"✅ 데이터 파일 동기화 완료: {legacy_path} -> {local_path}")
                         else:
-                            shutil.copy(legacy_path, local_path)
-                            logs.append(f"✅ 데이터 파일 동기화 완료: {legacy_path} -> {local_path}")
-                    except shutil.SameFileError:
-                        logs.append("ℹ️ 이미 최신 데이터입니다 (SameFileError).")
+                             logs.append("ℹ️ 데이터 파일이 이미 최신 위치에 있습니다 (동일 파일).")
                     except Exception as copy_err:
                         logs.append(f"❌ 파일 복사 중 오류: {str(copy_err)}")
                 elif os.path.exists(local_path):
@@ -340,344 +395,348 @@ def run_update_process(update_code, update_data, update_model):
 
 # --- [메인 로직] ---
 def main():
-    st.sidebar.title("🛡️ AEGIS SYSTEM")
+    try:
+        st.sidebar.title("🛡️ AEGIS SYSTEM")
 
-    # 사이드바 메뉴 선택
-    menu = st.sidebar.radio("메뉴 선택", ["대시보드", "통합 커맨드 센터", "예약 및 스케줄 관리"])
+        # 사이드바 메뉴 선택
+        menu = st.sidebar.radio("메뉴 선택", ["대시보드", "통합 커맨드 센터", "예약 및 스케줄 관리"])
 
-    # [수정] 사이드바에 상시 노출되는 명령 입력창 추가 (이미지 업로드 포함)
-    st.sidebar.markdown("---")
-    with st.sidebar.expander("📝 Commander's Log", expanded=False):
-        cmd_input = st.text_area("명령 입력", placeholder="지시사항을 입력하세요...", key="sidebar_cmd_input")
-        uploaded_file = st.file_uploader("이미지 첨부 (선택)", type=['png', 'jpg', 'jpeg'], key="sidebar_img_upload")
+        # [수정] 사이드바에 상시 노출되는 명령 입력창 추가 (이미지 업로드 포함)
+        st.sidebar.markdown("---")
+        with st.sidebar.expander("📝 Commander's Log", expanded=False):
+            cmd_input = st.text_area("명령 입력", placeholder="지시사항을 입력하세요...", key="sidebar_cmd_input")
+            uploaded_file = st.file_uploader("이미지 첨부 (선택)", type=['png', 'jpg', 'jpeg'], key="sidebar_img_upload")
 
-        if st.button("💾 저장", key="sidebar_save_cmd"):
-            if cmd_input or uploaded_file:
-                image_filename = None
-                # 이미지 저장 로직
-                if uploaded_file:
-                    try:
-                        if not os.path.exists(COMMAND_IMAGES_DIR):
-                            os.makedirs(COMMAND_IMAGES_DIR)
+            if st.button("💾 전송 (Push)", key="sidebar_save_cmd"):
+                if cmd_input or uploaded_file:
+                    image_filename = None
+                    # 이미지 저장 로직
+                    if uploaded_file:
+                        try:
+                            if not os.path.exists(COMMAND_IMAGES_DIR):
+                                os.makedirs(COMMAND_IMAGES_DIR)
 
-                        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-                        image_filename = f"{timestamp}_{uploaded_file.name}"
-                        save_path = os.path.join(COMMAND_IMAGES_DIR, image_filename)
+                            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+                            image_filename = f"{timestamp}_{uploaded_file.name}"
+                            save_path = os.path.join(COMMAND_IMAGES_DIR, image_filename)
 
-                        with open(save_path, "wb") as f:
-                            f.write(uploaded_file.getbuffer())
-                        st.sidebar.success(f"이미지 저장됨: {image_filename}")
-                    except Exception as e:
-                        st.sidebar.error(f"이미지 저장 실패: {e}")
+                            with open(save_path, "wb") as f:
+                                f.write(uploaded_file.getbuffer())
+                            st.sidebar.success(f"이미지 저장됨: {image_filename}")
+                        except Exception as e:
+                            st.sidebar.error(f"이미지 저장 실패: {e}")
 
-                if save_user_request(cmd_input if cmd_input else "(이미지 전송)", image_filename):
-                    st.success("✅ 접수 완료!")
+                    # 명령 저장 및 Git Push 호출
+                    success, msg = save_user_request(cmd_input if cmd_input else "(이미지 전송)", image_filename)
+                    if success:
+                        st.success(msg)
+                    else:
+                        st.error(msg)
                 else:
-                    st.error("❌ 저장 실패")
-            else:
-                st.warning("내용을 입력하거나 이미지를 첨부하세요.")
+                    st.warning("내용을 입력하거나 이미지를 첨부하세요.")
 
-    if menu == "대시보드":
-        st.title("🛡️ AEGIS 대시보드 (XRP-BOT)")
-        st.caption("맥북 프로 M5 고성능 최적화 | 실시간 금융 데이터 시각화")
+        if menu == "대시보드":
+            st.title("🛡️ AEGIS 대시보드 (XRP-BOT)")
+            st.caption("맥북 프로 M5 고성능 최적화 | 실시간 금융 데이터 시각화")
 
-        # 1. 사이드바: 제어판
-        st.sidebar.header("🎛️ 제어판")
+            # 1. 사이드바: 제어판
+            st.sidebar.header("🎛️ 제어판")
 
-        # 분석 기간 선택
-        timeframe_options = {
-            "1시간 (1H)": "1h",
-            "1일 (1D)": "1D",
-            "1주 (1W)": "1W",
-            "1개월 (1M)": "1ME",
-            "1년 (1Y)": "1YE"
-        }
+            # 분석 기간 선택
+            timeframe_options = {
+                "1시간 (1H)": "1h",
+                "1일 (1D)": "1D",
+                "1주 (1W)": "1W",
+                "1개월 (1M)": "1ME",
+                "1년 (1Y)": "1YE"
+            }
 
-        selected_label = st.sidebar.radio(
-            "분석 기간 선택",
-            list(timeframe_options.keys()),
-            index=1
-        )
+            selected_label = st.sidebar.radio(
+                "분석 기간 선택",
+                list(timeframe_options.keys()),
+                index=1
+            )
 
-        # 데이터 로드 시도
-        raw_df, error_msg = load_data()
+            # 데이터 로드 시도
+            raw_df, error_msg = load_data()
 
-        # 데이터 로드 실패 시 에러 표시
-        if raw_df is None:
-            st.error("⚠️ 데이터 로드 실패")
-            with st.expander("상세 오류 내용 보기"):
-                st.code(error_msg)
-            st.info("ℹ️ 'historical_data_3y.csv' 파일이 현재 디렉토리에 있는지 확인해주세요.")
-            return
+            # 데이터 로드 실패 시 에러 표시
+            if raw_df is None:
+                st.error("⚠️ 데이터 로드 실패")
+                with st.expander("상세 오류 내용 보기"):
+                    st.code(error_msg)
+                st.info("ℹ️ 'historical_data_3y.csv' 파일이 현재 디렉토리에 있는지 확인해주세요.")
+                return
 
-        if raw_df.empty:
-            st.error("데이터프레임이 비어 있습니다.")
-            return
+            if raw_df.empty:
+                st.error("데이터프레임이 비어 있습니다.")
+                return
 
-        # 2. 데이터 리샘플링
-        rule = timeframe_options[selected_label]
-        agg_dict = {
-            'open': 'first',
-            'high': 'max',
-            'low': 'min',
-            'close': 'last',
-            'volume': 'sum',
-            'prob': 'mean'
-        }
+            # 2. 데이터 리샘플링
+            rule = timeframe_options[selected_label]
+            agg_dict = {
+                'open': 'first',
+                'high': 'max',
+                'low': 'min',
+                'close': 'last',
+                'volume': 'sum',
+                'prob': 'mean'
+            }
 
-        try:
-            if not isinstance(raw_df.index, pd.DatetimeIndex):
-                raw_df.index = pd.to_datetime(raw_df.index)
-            df_resampled = raw_df.resample(rule).agg(agg_dict).dropna()
-        except Exception as e:
-            st.sidebar.error(f"리샘플링 오류: {e}")
-            df_resampled = raw_df
+            try:
+                if not isinstance(raw_df.index, pd.DatetimeIndex):
+                    raw_df.index = pd.to_datetime(raw_df.index)
+                df_resampled = raw_df.resample(rule).agg(agg_dict).dropna()
+            except Exception as e:
+                st.sidebar.error(f"리샘플링 오류: {e}")
+                df_resampled = raw_df
 
-        if df_resampled.empty:
-            st.warning("선택한 기간에 해당하는 데이터가 없습니다.")
-            return
+            if df_resampled.empty:
+                st.warning("선택한 기간에 해당하는 데이터가 없습니다.")
+                return
 
-        latest = df_resampled.iloc[-1]
-        prev = df_resampled.iloc[-2] if len(df_resampled) > 1 else latest
+            latest = df_resampled.iloc[-1]
+            prev = df_resampled.iloc[-2] if len(df_resampled) > 1 else latest
 
-        # 3. 핵심 지표 (Metrics)
-        col1, col2, col3, col4 = st.columns(4)
-        price_change = latest['close'] - prev['close']
-        price_pct = (price_change / prev['close']) * 100 if prev['close'] != 0 else 0
-
-        with col1:
-            st.metric("현재가 (Close)", f"${latest['close']:.4f}", f"{price_pct:.2f}%")
-        with col2:
-            st.metric("시가 (Open)", f"${latest['open']:.4f}")
-        with col3:
-            st.metric("거래량 (Volume)", f"{int(latest['volume']):,}")
-        with col4:
-            st.metric("오늘의 승률 (Avg Prob)", f"{latest['prob']:.1f}%", delta_color="off")
-
-        st.divider()
-
-        # 4. 차트 시각화
-        st.subheader(f"📊 {selected_label} 캔들스틱 및 예측 성공률")
-        fig = make_subplots(
-            rows=2, cols=1,
-            shared_xaxes=True,
-            vertical_spacing=0.03,
-            row_heights=[0.7, 0.3],
-            specs=[[{"secondary_y": False}], [{"secondary_y": False}]]
-        )
-
-        fig.add_trace(go.Candlestick(
-            x=df_resampled.index,
-            open=df_resampled['open'],
-            high=df_resampled['high'],
-            low=df_resampled['low'],
-            close=df_resampled['close'],
-            name="가격(OHLC)",
-            increasing_line_color='#22C55E',
-            decreasing_line_color='#EF4444'
-        ), row=1, col=1)
-
-        colors = ['#3B82F6' if v >= 50 else '#6B7280' for v in df_resampled['prob']]
-        fig.add_trace(go.Bar(
-            x=df_resampled.index,
-            y=df_resampled['prob'],
-            name="예측 성공률(%)",
-            marker_color=colors
-        ), row=2, col=1)
-
-        fig.update_layout(
-            template="plotly_dark",
-            xaxis_rangeslider_visible=False,
-            paper_bgcolor='rgba(0,0,0,0)',
-            plot_bgcolor='rgba(0,0,0,0)',
-            margin=dict(l=10, r=10, t=10, b=10),
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-            height=600
-        )
-        fig.update_yaxes(title_text="가격 ($)", autorange=True, row=1, col=1)
-        fig.update_yaxes(title_text="성공률 (%)", range=[0, 100], row=2, col=1)
-        st.plotly_chart(fig, width="stretch")
-        st.markdown("---")
-        st.caption("System Status: 🟢 Online | Model: AEGIS v4.0.0 | Data Source: Local CSV (or Simulation)")
-
-    elif menu == "통합 커맨드 센터":
-        st.title("🛠️ AEGIS 통합 커맨드 센터")
-        st.caption("시스템 제어, GitHub 연동, 명령 하달을 위한 중앙 통제실")
-
-        # --- [설정 및 GitHub 연동] ---
-        # [수정] 설정 불러오기
-        config = load_config()
-
-        with st.expander("⚙️ 시스템 및 GitHub 설정", expanded=True):
-            col1, col2 = st.columns(2)
-            default_owner_git, default_repo_git = get_github_repo_info()
-
-            # config에 값이 있으면 우선 사용, 없으면 git 명령 결과 사용
-            init_owner = config.get("github_owner", default_owner_git)
-            init_repo = config.get("github_repo", default_repo_git)
-            init_token = config.get("github_token", "")
+            # 3. 핵심 지표 (Metrics)
+            col1, col2, col3, col4 = st.columns(4)
+            price_change = latest['close'] - prev['close']
+            price_pct = (price_change / prev['close']) * 100 if prev['close'] != 0 else 0
 
             with col1:
-                repo_owner = st.text_input("GitHub Owner", value=init_owner)
-                repo_name = st.text_input("Repository Name", value=init_repo)
+                st.metric("현재가 (Close)", f"${latest['close']:.4f}", f"{price_pct:.2f}%")
             with col2:
-                github_token = st.text_input("GitHub Token (PAT)", value=init_token, type="password", help="repo 권한이 있는 Personal Access Token 입력")
-
-            # [수정] 설정 저장 버튼
-            if st.button("💾 설정 저장 (Save Config)"):
-                success, msg = save_config(repo_owner, repo_name, github_token)
-                if success:
-                    st.success(msg)
-                else:
-                    st.error(msg)
-
-        st.divider()
-
-        # --- [섹션 1: 시스템 업데이트] ---
-        st.subheader("1️⃣ 시스템 업데이트 (Update Center)")
-        with st.form("update_form"):
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                chk_code = st.checkbox("최신 시스템 코드 (git pull)", value=True)
-            with col2:
-                chk_data = st.checkbox("최신 시세 데이터 동기화", value=True)
+                st.metric("시가 (Open)", f"${latest['open']:.4f}")
             with col3:
-                chk_model = st.checkbox("AI 모델 가중치 확인", value=False)
+                st.metric("거래량 (Volume)", f"{int(latest['volume']):,}")
+            with col4:
+                st.metric("오늘의 승률 (Avg Prob)", f"{latest['prob']:.1f}%", delta_color="off")
 
-            submit_update = st.form_submit_button("🚀 선택 항목 업데이트 실행")
+            st.divider()
 
-        if submit_update:
-            with st.status("시스템 업데이트 진행 중...", expanded=True) as status:
-                st.write("🔄 업데이트 프로세스를 시작합니다...")
-                logs = run_update_process(chk_code, chk_data, chk_model)
-                for log in logs:
-                    if "❌" in log: st.error(log)
-                    elif "⚠️" in log: st.warning(log)
-                    else: st.success(log)
-                status.update(label="업데이트 완료!", state="complete", expanded=True)
-            if st.button("시스템 재시작 (화면 새로고침)"):
-                st.rerun()
+            # 4. 차트 시각화
+            st.subheader(f"📊 {selected_label} 캔들스틱 및 예측 성공률")
+            fig = make_subplots(
+                rows=2, cols=1,
+                shared_xaxes=True,
+                vertical_spacing=0.03,
+                row_heights=[0.7, 0.3],
+                specs=[[{"secondary_y": False}], [{"secondary_y": False}]]
+            )
 
-        st.divider()
+            fig.add_trace(go.Candlestick(
+                x=df_resampled.index,
+                open=df_resampled['open'],
+                high=df_resampled['high'],
+                low=df_resampled['low'],
+                close=df_resampled['close'],
+                name="가격(OHLC)",
+                increasing_line_color='#22C55E',
+                decreasing_line_color='#EF4444'
+            ), row=1, col=1)
 
-        # --- [섹션 2: GitHub PR 관리] ---
-        st.subheader("2️⃣ Pull Request 승인 및 병합 (One-Stop Merge)")
+            colors = ['#3B82F6' if v >= 50 else '#6B7280' for v in df_resampled['prob']]
+            fig.add_trace(go.Bar(
+                x=df_resampled.index,
+                y=df_resampled['prob'],
+                name="예측 성공률(%)",
+                marker_color=colors
+            ), row=2, col=1)
 
-        if not github_token:
-            st.warning("⚠️ GitHub Token이 입력되지 않았습니다. 상단 설정 메뉴에서 Token을 입력해주세요.")
-            st.info("💡 GitHub Token은 PR 목록을 조회하고 병합하는 데 필수적입니다.")
-        else:
-            if st.button("🔄 열린 PR 목록 불러오기"):
-                prs, error = fetch_prs(repo_owner, repo_name, github_token)
-                if error:
-                    st.error(error)
-                elif not prs:
-                    st.info("✅ 현재 열려 있는 PR이 없습니다.")
-                else:
-                    st.session_state['prs'] = prs
+            fig.update_layout(
+                template="plotly_dark",
+                xaxis_rangeslider_visible=False,
+                paper_bgcolor='rgba(0,0,0,0)',
+                plot_bgcolor='rgba(0,0,0,0)',
+                margin=dict(l=10, r=10, t=10, b=10),
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+                height=600
+            )
+            fig.update_yaxes(title_text="가격 ($)", autorange=True, row=1, col=1)
+            fig.update_yaxes(title_text="성공률 (%)", range=[0, 100], row=2, col=1)
+            st.plotly_chart(fig, width="stretch")
+            st.markdown("---")
+            st.caption("System Status: 🟢 Online | Model: AEGIS v4.0.0 | Data Source: Local CSV (or Simulation)")
 
-            if 'prs' in st.session_state and st.session_state['prs']:
-                st.write(f"총 {len(st.session_state['prs'])}개의 PR이 대기 중입니다.")
-                for pr in st.session_state['prs']:
-                    with st.container(border=True):
-                        col1, col2 = st.columns([3, 1])
-                        with col1:
-                            st.markdown(f"**#{pr['number']} {pr['title']}**")
-                            st.caption(f"작성자: {pr['user']['login']}")
-                            st.markdown(f"[PR 링크 바로가기]({pr['html_url']})")
+        elif menu == "통합 커맨드 센터":
+            st.title("🛠️ AEGIS 통합 커맨드 센터")
+            st.caption("시스템 제어, GitHub 연동, 명령 하달을 위한 중앙 통제실")
 
-                            # [수정] PR 상세 정보 (Expander)
-                            with st.expander("📝 PR 상세 내용 보기"):
-                                st.markdown(pr.get('body', '설명 없음'))
-                                st.caption(f"생성일: {pr['created_at']}")
+            # --- [설정 및 GitHub 연동] ---
+            # [수정] 설정 불러오기
+            config = load_config()
 
-                        with col2:
-                            if st.button(f"✅ 승인 및 병합 (#{pr['number']})", key=f"merge_{pr['number']}"):
-                                success, msg = merge_pr(repo_owner, repo_name, pr['number'], github_token)
-                                if success:
-                                    st.success(f"#{pr['number']} 병합 성공!")
-                                    # 목록 갱신을 위해 재실행 요청
-                                    del st.session_state['prs']
-                                    st.rerun()
-                                else:
-                                    st.error(msg)
+            with st.expander("⚙️ 시스템 및 GitHub 설정", expanded=True):
+                col1, col2 = st.columns(2)
+                default_owner_git, default_repo_git = get_github_repo_info()
 
-        st.divider()
+                # config에 값이 있으면 우선 사용, 없으면 git 명령 결과 사용
+                init_owner = config.get("github_owner", default_owner_git)
+                init_repo = config.get("github_repo", default_repo_git)
+                init_token = config.get("github_token", "")
 
-        # --- [섹션 3: 사령관 명령 하달] ---
-        st.subheader("3️⃣ 사령관 명령 입력 (Commander's Orders)")
-        st.caption("추가 변경 사항이나 개선 요청을 입력하세요. 줄스(Jules)가 최우선으로 반영합니다.")
+                with col1:
+                    repo_owner = st.text_input("GitHub Owner", value=init_owner)
+                    repo_name = st.text_input("Repository Name", value=init_repo)
+                with col2:
+                    github_token = st.text_input("GitHub Token (PAT)", value=init_token, type="password", help="repo 권한이 있는 Personal Access Token 입력")
 
-        with st.form("commander_request_form"):
-            request_text = st.text_area("💡 추가 변경/요청 사항 입력", placeholder="예: 예약 시간을 5분 단위로 더 쪼개줘.", height=100)
-            submit_request = st.form_submit_button("📩 명령 전송 (Send Command)")
+                # [수정] 설정 저장 버튼
+                if st.button("💾 설정 저장 (Save Config)"):
+                    success, msg = save_config(repo_owner, repo_name, github_token)
+                    if success:
+                        st.success(msg)
+                    else:
+                        st.error(msg)
 
-        if submit_request and request_text:
-            if save_user_request(request_text):
-                st.success("✅ 명령이 성공적으로 접수되었습니다! ('user_requests.txt'에 저장됨)")
+            st.divider()
+
+            # --- [섹션 1: 시스템 업데이트] ---
+            st.subheader("1️⃣ 시스템 업데이트 (Update Center)")
+            with st.form("update_form"):
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    chk_code = st.checkbox("최신 시스템 코드 (git pull)", value=True)
+                with col2:
+                    chk_data = st.checkbox("최신 시세 데이터 동기화", value=True)
+                with col3:
+                    chk_model = st.checkbox("AI 모델 가중치 확인", value=False)
+
+                submit_update = st.form_submit_button("🚀 선택 항목 업데이트 실행")
+
+            if submit_update:
+                with st.status("시스템 업데이트 진행 중...", expanded=True) as status:
+                    st.write("🔄 업데이트 프로세스를 시작합니다...")
+                    logs = run_update_process(chk_code, chk_data, chk_model)
+                    for log in logs:
+                        if "❌" in log: st.error(log)
+                        elif "⚠️" in log: st.warning(log)
+                        else: st.success(log)
+                    status.update(label="업데이트 완료!", state="complete", expanded=True)
+                if st.button("시스템 재시작 (화면 새로고침)"):
+                    st.rerun()
+
+            st.divider()
+
+            # --- [섹션 2: GitHub PR 관리] ---
+            st.subheader("2️⃣ Pull Request 승인 및 병합 (One-Stop Merge)")
+
+            if not github_token:
+                st.warning("⚠️ GitHub Token이 입력되지 않았습니다. 상단 설정 메뉴에서 Token을 입력해주세요.")
+                st.info("💡 GitHub Token은 PR 목록을 조회하고 병합하는 데 필수적입니다.")
             else:
-                st.error("❌ 명령 저장 중 오류가 발생했습니다.")
+                if st.button("🔄 열린 PR 목록 불러오기"):
+                    prs, error = fetch_prs(repo_owner, repo_name, github_token)
+                    if error:
+                        st.error(error)
+                    elif not prs:
+                        st.info("✅ 현재 열려 있는 PR이 없습니다.")
+                    else:
+                        st.session_state['prs'] = prs
 
-    elif menu == "예약 및 스케줄 관리":
-        st.title("🗓️ 예약 및 스케줄 관리 센터 (Scheduling Center)")
-        st.caption("시스템 자동 실행 시간을 설정하고 관리합니다.")
+                if 'prs' in st.session_state and st.session_state['prs']:
+                    st.write(f"총 {len(st.session_state['prs'])}개의 PR이 대기 중입니다.")
+                    for pr in st.session_state['prs']:
+                        with st.container(border=True):
+                            col1, col2 = st.columns([3, 1])
+                            with col1:
+                                st.markdown(f"**#{pr['number']} {pr['title']}**")
+                                st.caption(f"작성자: {pr['user']['login']}")
+                                st.markdown(f"[PR 링크 바로가기]({pr['html_url']})")
 
-        # 1. 현재 예약 현황
-        st.subheader("1️⃣ 현재 예약된 스케줄")
-        current_jobs = get_aegis_jobs()
-        if not current_jobs:
-            st.info("ℹ️ 현재 등록된 AEGIS 예약 작업이 없습니다.")
-        else:
-            job_df = pd.DataFrame(current_jobs)
-            st.table(job_df)
+                                # [수정] PR 상세 정보 (Expander)
+                                with st.expander("📝 PR 상세 내용 보기"):
+                                    st.markdown(pr.get('body', '설명 없음'))
+                                    st.caption(f"생성일: {pr['created_at']}")
 
-        st.divider()
+                            with col2:
+                                if st.button(f"✅ 승인 및 병합 (#{pr['number']})", key=f"merge_{pr['number']}"):
+                                    success, msg = merge_pr(repo_owner, repo_name, pr['number'], github_token)
+                                    if success:
+                                        st.success(f"#{pr['number']} 병합 성공!")
+                                        # 목록 갱신을 위해 재실행 요청
+                                        del st.session_state['prs']
+                                        st.rerun()
+                                    else:
+                                        st.error(msg)
 
-        # 2. 새로운 예약 추가
-        st.subheader("2️⃣ 새로운 예약 추가")
-        st.caption("매일, 매주, 또는 특정 간격으로 시스템을 자동 실행합니다.")
+            st.divider()
 
-        tab1, tab2, tab3 = st.tabs(["매일 (Daily)", "매주 (Weekly)", "간격 (Interval)"])
+            # --- [섹션 3: 사령관 명령 하달] ---
+            st.subheader("3️⃣ 사령관 명령 입력 (Commander's Orders)")
+            st.caption("추가 변경 사항이나 개선 요청을 입력하세요. 줄스(Jules)가 최우선으로 반영합니다.")
 
-        with tab1:
-            st.markdown("##### 매일 정해진 시간에 실행")
-            daily_time = st.time_input("실행 시간 선택", datetime.time(9, 0))
-            if st.button("예약 적용 (Daily)", key="btn_daily"):
-                # Cron: MM HH * * *
-                cron_str = f"{daily_time.minute} {daily_time.hour} * * *"
-                success, msg = add_aegis_job(cron_str)
+            with st.form("commander_request_form"):
+                request_text = st.text_area("💡 추가 변경/요청 사항 입력", placeholder="예: 예약 시간을 5분 단위로 더 쪼개줘.", height=100)
+                submit_request = st.form_submit_button("📩 명령 전송 (Send Command)")
+
+            if submit_request and request_text:
+                success, msg = save_user_request(request_text)
                 if success:
-                    st.success(f"✅ 매일 {daily_time}에 실행 예약되었습니다.")
-                    st.rerun()
+                    st.success(f"✅ {msg}")
                 else:
-                    st.error(msg)
+                    st.error(f"❌ {msg}")
 
-        with tab2:
-            st.markdown("##### 매주 특정 요일, 특정 시간에 실행")
-            col1, col2 = st.columns(2)
-            with col1:
-                # 0=Sunday, 1=Monday ... but cron expects 0-6 (Sun-Sat) or 1-7 (Mon-Sun).
-                # Python datetime weekday: 0=Mon, 6=Sun.
-                # Cron: 0-6 (Sun-Sat). Usually 1=Mon. Let's use name map for clarity.
-                days_map = {"월요일": 1, "화요일": 2, "수요일": 3, "목요일": 4, "금요일": 5, "토요일": 6, "일요일": 0}
-                selected_day = st.selectbox("요일 선택", list(days_map.keys()))
-            with col2:
-                weekly_time = st.time_input("실행 시간 선택", datetime.time(9, 0), key="weekly_time")
+        elif menu == "예약 및 스케줄 관리":
+            st.title("🗓️ 예약 및 스케줄 관리 센터 (Scheduling Center)")
+            st.caption("시스템 자동 실행 시간을 설정하고 관리합니다.")
 
-            if st.button("예약 적용 (Weekly)", key="btn_weekly"):
-                # Cron: MM HH * * W
-                cron_day = days_map[selected_day]
-                cron_str = f"{weekly_time.minute} {weekly_time.hour} * * {cron_day}"
-                success, msg = add_aegis_job(cron_str)
-                if success:
-                    st.success(f"✅ 매주 {selected_day} {weekly_time}에 실행 예약되었습니다.")
-                    st.rerun()
-                else:
-                    st.error(msg)
+            # 1. 현재 예약 현황
+            st.subheader("1️⃣ 현재 예약된 스케줄")
+            current_jobs = get_aegis_jobs()
+            if not current_jobs:
+                st.info("ℹ️ 현재 등록된 AEGIS 예약 작업이 없습니다.")
+            else:
+                job_df = pd.DataFrame(current_jobs)
+                st.table(job_df)
 
-        with tab3:
-            st.markdown("##### 일정 시간 간격으로 실행")
-            interval_hours = st.number_input("시간 간격 (Hour)", min_value=1, max_value=23, value=1)
+            st.divider()
+
+            # 2. 새로운 예약 추가
+            st.subheader("2️⃣ 새로운 예약 추가")
+            st.caption("매일, 매주, 또는 특정 간격으로 시스템을 자동 실행합니다.")
+
+            tab1, tab2, tab3 = st.tabs(["매일 (Daily)", "매주 (Weekly)", "간격 (Interval)"])
+
+            with tab1:
+                st.markdown("##### 매일 정해진 시간에 실행")
+                daily_time = st.time_input("실행 시간 선택", datetime.time(9, 0))
+                if st.button("예약 적용 (Daily)", key="btn_daily"):
+                    # Cron: MM HH * * *
+                    cron_str = f"{daily_time.minute} {daily_time.hour} * * *"
+                    success, msg = add_aegis_job(cron_str)
+                    if success:
+                        st.success(f"✅ 매일 {daily_time}에 실행 예약되었습니다.")
+                        st.rerun()
+                    else:
+                        st.error(msg)
+
+            with tab2:
+                st.markdown("##### 매주 특정 요일, 특정 시간에 실행")
+                col1, col2 = st.columns(2)
+                with col1:
+                    # 0=Sunday, 1=Monday ... but cron expects 0-6 (Sun-Sat) or 1-7 (Mon-Sun).
+                    # Python datetime weekday: 0=Mon, 6=Sun.
+                    # Cron: 0-6 (Sun-Sat). Usually 1=Mon. Let's use name map for clarity.
+                    days_map = {"월요일": 1, "화요일": 2, "수요일": 3, "목요일": 4, "금요일": 5, "토요일": 6, "일요일": 0}
+                    selected_day = st.selectbox("요일 선택", list(days_map.keys()))
+                with col2:
+                    weekly_time = st.time_input("실행 시간 선택", datetime.time(9, 0), key="weekly_time")
+
+                if st.button("예약 적용 (Weekly)", key="btn_weekly"):
+                    # Cron: MM HH * * W
+                    cron_day = days_map[selected_day]
+                    cron_str = f"{weekly_time.minute} {weekly_time.hour} * * {cron_day}"
+                    success, msg = add_aegis_job(cron_str)
+                    if success:
+                        st.success(f"✅ 매주 {selected_day} {weekly_time}에 실행 예약되었습니다.")
+                        st.rerun()
+                    else:
+                        st.error(msg)
+
+            with tab3:
+                st.markdown("##### 일정 시간 간격으로 실행")
+                interval_hours = st.number_input("시간 간격 (Hour)", min_value=1, max_value=23, value=1)
 
             if st.button("예약 적용 (Interval)", key="btn_interval"):
                 # Cron: 0 */N * * *
@@ -689,17 +748,23 @@ def main():
                 else:
                     st.error(msg)
 
-        st.divider()
+            st.divider()
 
-        # 3. 예약 관리 (삭제)
-        st.subheader("3️⃣ 예약 초기화")
-        if st.button("🗑️ 모든 AEGIS 예약 삭제 (Clear All)", type="primary"):
-            success, msg = clear_aegis_jobs()
-            if success:
-                st.warning("⚠️ 모든 AEGIS 예약이 삭제되었습니다.")
-                st.rerun()
-            else:
-                st.error(msg)
+            # 3. 예약 관리 (삭제)
+            st.subheader("3️⃣ 예약 초기화")
+            if st.button("🗑️ 모든 AEGIS 예약 삭제 (Clear All)", type="primary"):
+                success, msg = clear_aegis_jobs()
+                if success:
+                    st.warning("⚠️ 모든 AEGIS 예약이 삭제되었습니다.")
+                    st.rerun()
+                else:
+                    st.error(msg)
+
+    except Exception as e:
+        # 전역 예외 처리 (Dashboard Crash 방지)
+        st.error("🚨 시스템 오류 발생! (Crash Avoided)")
+        st.code(str(e))
+        st.info("오류가 지속되면 관리자에게 문의하거나 로그를 확인하세요.")
 
 if __name__ == "__main__":
     main()
