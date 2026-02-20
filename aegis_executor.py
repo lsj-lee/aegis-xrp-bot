@@ -2,6 +2,7 @@ import pandas as pd
 import yfinance as yf
 import requests
 import datetime
+import json
 import torch
 import torch.nn as nn
 from sklearn.preprocessing import StandardScaler
@@ -380,6 +381,25 @@ def run_daily_execution():
     advanced_metrics = latest_data.to_dict(orient='records')[0]
 
     gemini_analysis = get_gemini_insight(analysis_data, advanced_metrics)
+
+    # 💾 Save Dashboard Data (Command Center)
+    dashboard_data = {
+        'timestamp': datetime.datetime.now().isoformat(),
+        'price': current_price,
+        'prob': prob_percent,
+        'fng': current_fng,
+        'ls_ratio': ls_ratio,
+        'funding_rate': funding_rate,
+        'rsi': rsi_val,
+        'advanced_metrics': advanced_metrics,
+        'judgment': "BULLISH" if prob_percent > 60 else "BEARISH" if prob_percent < 40 else "NEUTRAL",
+        'report': f"{code_analysis}\n\n{gemini_analysis}"
+    }
+    try:
+        with open('aegis_dashboard_data.json', 'w', encoding='utf-8') as f:
+            json.dump(dashboard_data, f, ensure_ascii=False, indent=4)
+    except Exception as e:
+        print(f"⚠️ Dashboard data save failed: {e}")
     
     return {
         'date': end_date, 'price': current_price, 'fng': current_fng,

@@ -34,10 +34,17 @@ PIPELINE_STEPS = [
 def print_status(message: str, level: str = "INFO"):
     """
     Prints a formatted status message with a timestamp and level.
-    This consolidates logging output for consistency.
+    This consolidates logging output for consistency and writes to a file.
     """
     timestamp = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    print(f"[{timestamp}] [{level:<5}] {message}")
+    log_line = f"[{timestamp}] [{level:<5}] {message}"
+    print(log_line)
+
+    try:
+        with open("aegis_system.log", "a", encoding="utf-8") as f:
+            f.write(log_line + "\n")
+    except Exception:
+        pass
 
 def check_pending_proposals():
     """
