@@ -5,7 +5,6 @@ import time
 import datetime
 import subprocess
 import argparse
-import glob
 from pathlib import Path # New import for object-oriented path handling
 
 # --- Module-level Constants ---
@@ -99,7 +98,7 @@ def _execute_pipeline_step(script_name: str, step_msg: str) -> bool:
             # Optionally, print subprocess output even on success for detailed logs.
             # For this context, assuming successful subprocesses manage their own output,
             # so we only print their captured output on failure.
-            # If full verbosity is desired:
+            # If full verbosity is desired, uncomment the following:
             # if result.stdout:
             #     print(f"--- {script_name} STDOUT ---")
             #     print(result.stdout.strip())
@@ -116,6 +115,37 @@ def _execute_pipeline_step(script_name: str, step_msg: str) -> bool:
         return False
         
     return True # Step completed successfully
+
+def _enter_sleep_mode():
+    """
+    Attempts to put the system into sleep mode if running on macOS.
+    Uses subprocess.run for better error handling than os.system.
+    """
+    if sys.platform == 'darwin': # Check if the operating system is macOS
+        print(f"\n🌙 임무를 완수했습니다. {SLEEP_WAIT_SECONDS}초 뒤 맥북을 절전 모드(Sleep)로 전환합니다...")
+        time.sleep(SLEEP_WAIT_SECONDS)
+        try:
+            # Use subprocess.run for better control and error handling
+            # MAC_SLEEP_COMMAND is 'pmset sleepnow'
+            result = subprocess.run(MAC_SLEEP_COMMAND.split(), check=True, capture_output=True, text=True)
+            if result.returncode == 0:
+                print("✅ 맥북이 성공적으로 절전 모드로 전환되었습니다.")
+            else:
+                print(f"⚠️ 맥북 절전 모드 전환 실패 (Exit Code: {result.returncode}).")
+                if result.stderr:
+                    print(f"   STDERR: {result.stderr.strip()}")
+                print("   수동으로 전환해주세요.")
+        except FileNotFoundError:
+            print(f"⚠️ 'pmset' 명령어를 찾을 수 없습니다. macOS 환경이 아니거나, 'pmset'이 설치되지 않았을 수 있습니다. 수동으로 전환해주세요.")
+        except subprocess.CalledProcessError as e:
+            print(f"⚠️ 맥북 절전 모드 전환 실패: 명령어 실행 중 오류 발생 (Exit Code: {e.returncode}).")
+            if e.stderr:
+                print(f"   STDERR: {e.stderr.strip()}")
+            print("   수동으로 전환해주세요.")
+        except Exception as e:
+            print(f"⚠️ 예기치 못한 오류로 맥북 절전 모드 전환 실패: {e}. 수동으로 전환해주세요.")
+    else:
+        print("⚠️ 현재 운영체제는 macOS가 아닙니다. 절전 모드 기능을 건너뜝니다.")
 
 def run_pipeline(auto_sleep: bool = False):
     """
@@ -160,14 +190,7 @@ def run_pipeline(auto_sleep: bool = False):
     print("=================================================================")
 
     if auto_sleep:
-        # 🌙 [자동 수면 모드] 완료 후 일정 시간 대기 후 맥북 절전 모드 진입.
-        print(f"\n🌙 임무를 완수했습니다. {SLEEP_WAIT_SECONDS}초 뒤 맥북을 절전 모드(Sleep)로 전환합니다...")
-        time.sleep(SLEEP_WAIT_SECONDS)
-        try:
-            # os.system is used for system-level commands not available via standard Python modules.
-            os.system(MAC_SLEEP_COMMAND) # Specific to macOS
-        except Exception as e:
-            print(f"⚠️ 맥북 절전 모드 전환 실패: {e}. 수동으로 전환해주세요.")
+        _enter_sleep_mode()
     else:
         print("\n✨ 시스템이 종료되었습니다. (자동 수면 모드 미실행)")
 
