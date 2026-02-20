@@ -19,6 +19,10 @@ st.set_page_config(
     layout="wide"
 )
 
+# --- [전역 상수] ---
+CONFIG_FILE = ".aegis_config.json"
+COMMAND_IMAGES_DIR = "command_images"
+
 # --- [스타일링: 다크 테마 및 커스텀 CSS] ---
 st.markdown("""
     <style>
@@ -30,6 +34,32 @@ st.markdown("""
     .stButton>button { width: 100%; border-radius: 8px; font-weight: bold; }
     </style>
     """, unsafe_allow_html=True)
+
+# --- [설정 저장 및 불러오기 (Persistence)] ---
+def load_config():
+    """설정 파일(.aegis_config.json)에서 GitHub 정보를 불러옴"""
+    if not os.path.exists(CONFIG_FILE):
+        return {}
+    try:
+        with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception as e:
+        st.error(f"설정 로드 중 오류: {str(e)}")
+        return {}
+
+def save_config(owner, repo, token):
+    """GitHub 정보를 설정 파일에 저장"""
+    data = {
+        "github_owner": owner,
+        "github_repo": repo,
+        "github_token": token
+    }
+    try:
+        with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=4, ensure_ascii=False)
+        return True, "설정이 성공적으로 저장되었습니다."
+    except Exception as e:
+        return False, f"설정 저장 실패: {str(e)}"
 
 # --- [GitHub API 유틸리티 함수] ---
 def get_github_repo_info():
@@ -85,10 +115,14 @@ def merge_pr(owner, repo, pr_number, token):
     except Exception as e:
         return False, str(e)
 
-def save_user_request(request_text):
-    """사용자 요청사항을 파일에 저장"""
+def save_user_request(request_text, image_filename=None):
+    """사용자 요청사항을 파일에 저장 (이미지 포함)"""
     timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    entry = f"[{timestamp}] {request_text}\n"
+    entry = f"[{timestamp}] {request_text}"
+    if image_filename:
+        entry += f" [첨부 이미지: {image_filename}]"
+    entry += "\n"
+
     try:
         with open("user_requests.txt", "a", encoding="utf-8") as f:
             f.write(entry)
@@ -268,9 +302,21 @@ def run_update_process(update_code, update_data, update_model):
                 legacy_path = os.path.expanduser("~/Desktop/xrp_research/historical_data_3y.csv")
                 local_path = "historical_data_3y.csv"
 
+                # [수정] SameFileError 방지 및 경로 확인
                 if os.path.exists(legacy_path):
-                    shutil.copy(legacy_path, local_path)
-                    logs.append(f"✅ 데이터 파일 동기화 완료: {legacy_path} -> {local_path}")
+                    try:
+                        abs_legacy = os.path.abspath(legacy_path)
+                        abs_local = os.path.abspath(local_path)
+
+                        if abs_legacy == abs_local:
+                             logs.append("ℹ️ 데이터 파일이 이미 최신 위치에 있습니다 (원본과 대상 경로 동일).")
+                        else:
+                            shutil.copy(legacy_path, local_path)
+                            logs.append(f"✅ 데이터 파일 동기화 완료: {legacy_path} -> {local_path}")
+                    except shutil.SameFileError:
+                        logs.append("ℹ️ 이미 최신 데이터입니다 (SameFileError).")
+                    except Exception as copy_err:
+                        logs.append(f"❌ 파일 복사 중 오류: {str(copy_err)}")
                 elif os.path.exists(local_path):
                     logs.append("ℹ️ 데이터 파일이 현재 디렉토리에 이미 존재합니다 (레거시 경로 미발견).")
                 else:
@@ -299,18 +345,37 @@ def main():
     # 사이드바 메뉴 선택
     menu = st.sidebar.radio("메뉴 선택", ["대시보드", "통합 커맨드 센터", "예약 및 스케줄 관리"])
 
-    # [수정] 사이드바에 상시 노출되는 명령 입력창 추가
+    # [수정] 사이드바에 상시 노출되는 명령 입력창 추가 (이미지 업로드 포함)
     st.sidebar.markdown("---")
     with st.sidebar.expander("📝 Commander's Log", expanded=False):
         cmd_input = st.text_area("명령 입력", placeholder="지시사항을 입력하세요...", key="sidebar_cmd_input")
+        uploaded_file = st.file_uploader("이미지 첨부 (선택)", type=['png', 'jpg', 'jpeg'], key="sidebar_img_upload")
+
         if st.button("💾 저장", key="sidebar_save_cmd"):
-            if cmd_input:
-                if save_user_request(cmd_input):
+            if cmd_input or uploaded_file:
+                image_filename = None
+                # 이미지 저장 로직
+                if uploaded_file:
+                    try:
+                        if not os.path.exists(COMMAND_IMAGES_DIR):
+                            os.makedirs(COMMAND_IMAGES_DIR)
+
+                        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+                        image_filename = f"{timestamp}_{uploaded_file.name}"
+                        save_path = os.path.join(COMMAND_IMAGES_DIR, image_filename)
+
+                        with open(save_path, "wb") as f:
+                            f.write(uploaded_file.getbuffer())
+                        st.sidebar.success(f"이미지 저장됨: {image_filename}")
+                    except Exception as e:
+                        st.sidebar.error(f"이미지 저장 실패: {e}")
+
+                if save_user_request(cmd_input if cmd_input else "(이미지 전송)", image_filename):
                     st.success("✅ 접수 완료!")
                 else:
                     st.error("❌ 저장 실패")
             else:
-                st.warning("내용을 입력하세요.")
+                st.warning("내용을 입력하거나 이미지를 첨부하세요.")
 
     if menu == "대시보드":
         st.title("🛡️ AEGIS 대시보드 (XRP-BOT)")
@@ -440,15 +505,31 @@ def main():
         st.caption("시스템 제어, GitHub 연동, 명령 하달을 위한 중앙 통제실")
 
         # --- [설정 및 GitHub 연동] ---
+        # [수정] 설정 불러오기
+        config = load_config()
+
         with st.expander("⚙️ 시스템 및 GitHub 설정", expanded=True):
             col1, col2 = st.columns(2)
-            default_owner, default_repo = get_github_repo_info()
+            default_owner_git, default_repo_git = get_github_repo_info()
+
+            # config에 값이 있으면 우선 사용, 없으면 git 명령 결과 사용
+            init_owner = config.get("github_owner", default_owner_git)
+            init_repo = config.get("github_repo", default_repo_git)
+            init_token = config.get("github_token", "")
 
             with col1:
-                repo_owner = st.text_input("GitHub Owner", value=default_owner)
-                repo_name = st.text_input("Repository Name", value=default_repo)
+                repo_owner = st.text_input("GitHub Owner", value=init_owner)
+                repo_name = st.text_input("Repository Name", value=init_repo)
             with col2:
-                github_token = st.text_input("GitHub Token (PAT)", type="password", help="repo 권한이 있는 Personal Access Token 입력")
+                github_token = st.text_input("GitHub Token (PAT)", value=init_token, type="password", help="repo 권한이 있는 Personal Access Token 입력")
+
+            # [수정] 설정 저장 버튼
+            if st.button("💾 설정 저장 (Save Config)"):
+                success, msg = save_config(repo_owner, repo_name, github_token)
+                if success:
+                    st.success(msg)
+                else:
+                    st.error(msg)
 
         st.divider()
 
@@ -502,8 +583,14 @@ def main():
                         col1, col2 = st.columns([3, 1])
                         with col1:
                             st.markdown(f"**#{pr['number']} {pr['title']}**")
-                            st.caption(f"작성자: {pr['user']['login']} | 생성일: {pr['created_at']}")
+                            st.caption(f"작성자: {pr['user']['login']}")
                             st.markdown(f"[PR 링크 바로가기]({pr['html_url']})")
+
+                            # [수정] PR 상세 정보 (Expander)
+                            with st.expander("📝 PR 상세 내용 보기"):
+                                st.markdown(pr.get('body', '설명 없음'))
+                                st.caption(f"생성일: {pr['created_at']}")
+
                         with col2:
                             if st.button(f"✅ 승인 및 병합 (#{pr['number']})", key=f"merge_{pr['number']}"):
                                 success, msg = merge_pr(repo_owner, repo_name, pr['number'], github_token)
