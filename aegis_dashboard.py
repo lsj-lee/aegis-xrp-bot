@@ -72,11 +72,11 @@ def git_push_changes(files_to_add, commit_message):
     logs = []
     try:
         # 1. Add
-        subprocess.run(["git", "add"] + files_to_add, check=True, capture_output=True)
+        subprocess.run(["git", "add"] + files_to_add, check=True, capture_output=True, text=True)
         logs.append(f"Git Add: {files_to_add}")
 
         # 2. Commit
-        subprocess.run(["git", "commit", "-m", commit_message], check=True, capture_output=True)
+        subprocess.run(["git", "commit", "-m", commit_message], check=True, capture_output=True, text=True)
         logs.append(f"Git Commit: {commit_message}")
 
         # 3. Push
@@ -88,7 +88,7 @@ def git_push_changes(files_to_add, commit_message):
         # Commit 할 것이 없는 경우 (Clean working tree) 등
         if "nothing to commit" in str(e.stdout) or "nothing to commit" in str(e.stderr):
              return True, "변경 사항이 없어 커밋하지 않았습니다."
-        return False, f"Git 명령 오류: {e.stderr.decode('utf-8') if e.stderr else str(e)}"
+        return False, f"Git 명령 오류: {e.stderr if e.stderr else str(e)}"
     except Exception as e:
         return False, f"Git 실행 중 오류: {str(e)}"
 
@@ -161,14 +161,14 @@ def create_pr_from_changes(owner, repo, token, files_to_add, commit_msg, pr_titl
             original_branch = res.stdout.strip()
 
         # 1. 브랜치 생성 및 이동
-        subprocess.run(["git", "checkout", "-b", branch_name], check=True, capture_output=True)
+        subprocess.run(["git", "checkout", "-b", branch_name], check=True, capture_output=True, text=True)
 
         # 2. Add & Commit
-        subprocess.run(["git", "add"] + files_to_add, check=True, capture_output=True)
-        subprocess.run(["git", "commit", "-m", commit_msg], check=True, capture_output=True)
+        subprocess.run(["git", "add"] + files_to_add, check=True, capture_output=True, text=True)
+        subprocess.run(["git", "commit", "-m", commit_msg], check=True, capture_output=True, text=True)
 
         # 3. Push
-        subprocess.run(["git", "push", "origin", branch_name], check=True, capture_output=True)
+        subprocess.run(["git", "push", "origin", branch_name], check=True, capture_output=True, text=True)
 
         # 4. PR 생성 API 호출
         # 기본 브랜치 확인
@@ -196,7 +196,7 @@ def create_pr_from_changes(owner, repo, token, files_to_add, commit_msg, pr_titl
         resp = requests.post(url, headers=headers, json=payload)
 
         # 5. 원래 브랜치 복귀
-        subprocess.run(["git", "checkout", original_branch], check=True, capture_output=True)
+        subprocess.run(["git", "checkout", original_branch], check=True, capture_output=True, text=True)
 
         if resp.status_code == 201:
             pr_data = resp.json()
@@ -206,7 +206,7 @@ def create_pr_from_changes(owner, repo, token, files_to_add, commit_msg, pr_titl
 
     except Exception as e:
         # 오류 발생 시 원래 브랜치로 복구 시도
-        subprocess.run(["git", "checkout", original_branch], capture_output=True)
+        subprocess.run(["git", "checkout", original_branch], capture_output=True, text=True)
         return False, f"PR 프로세스 중 오류: {str(e)}"
 
 def save_user_request(request_text, image_filename=None, create_pr=False, gh_config=None):
