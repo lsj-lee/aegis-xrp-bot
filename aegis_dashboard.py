@@ -54,6 +54,9 @@ def get_github_repo_info():
 
 def fetch_prs(owner, repo, token):
     """GitHub API를 통해 열린 PR 목록 조회"""
+    if not token:
+        return [], "GitHub Token이 필요합니다."
+
     url = f"https://api.github.com/repos/{owner}/{repo}/pulls"
     headers = {"Authorization": f"token {token}", "Accept": "application/vnd.github.v3+json"}
     try:
@@ -67,6 +70,9 @@ def fetch_prs(owner, repo, token):
 
 def merge_pr(owner, repo, pr_number, token):
     """GitHub API를 통해 PR 병합 (Merge)"""
+    if not token:
+        return False, "GitHub Token이 필요합니다."
+
     url = f"https://api.github.com/repos/{owner}/{repo}/pulls/{pr_number}/merge"
     headers = {"Authorization": f"token {token}", "Accept": "application/vnd.github.v3+json"}
     payload = {"commit_title": f"Merge pull request #{pr_number} from dashboard", "merge_method": "merge"}
@@ -199,8 +205,22 @@ def load_data():
         if 'date' in df.columns and 'timestamp' not in df.columns:
             df.rename(columns={'date': 'timestamp'}, inplace=True)
 
-        # 3. 필수 컬럼 확인
-        required_cols = ['timestamp', 'open', 'high', 'low', 'close', 'volume']
+        # [수정] 'xrp' 컬럼이 있으면 'close'로 인식
+        if 'xrp' in df.columns:
+            df.rename(columns={'xrp': 'close'}, inplace=True)
+
+        # [수정] open, high, low 컬럼이 없으면 close 값으로 채움
+        if 'close' in df.columns:
+            for col in ['open', 'high', 'low']:
+                if col not in df.columns:
+                    df[col] = df['close']
+
+        # [수정] volume 컬럼이 없으면 0으로 채움
+        if 'volume' not in df.columns:
+            df['volume'] = 0
+
+        # 3. 필수 컬럼 확인 (최소한 timestamp와 close는 있어야 함)
+        required_cols = ['timestamp', 'close']
         missing_cols = [col for col in required_cols if col not in df.columns]
 
         if missing_cols:
@@ -279,6 +299,19 @@ def main():
     # 사이드바 메뉴 선택
     menu = st.sidebar.radio("메뉴 선택", ["대시보드", "통합 커맨드 센터", "예약 및 스케줄 관리"])
 
+    # [수정] 사이드바에 상시 노출되는 명령 입력창 추가
+    st.sidebar.markdown("---")
+    with st.sidebar.expander("📝 Commander's Log", expanded=False):
+        cmd_input = st.text_area("명령 입력", placeholder="지시사항을 입력하세요...", key="sidebar_cmd_input")
+        if st.button("💾 저장", key="sidebar_save_cmd"):
+            if cmd_input:
+                if save_user_request(cmd_input):
+                    st.success("✅ 접수 완료!")
+                else:
+                    st.error("❌ 저장 실패")
+            else:
+                st.warning("내용을 입력하세요.")
+
     if menu == "대시보드":
         st.title("🛡️ AEGIS 대시보드 (XRP-BOT)")
         st.caption("맥북 프로 M5 고성능 최적화 | 실시간 금융 데이터 시각화")
@@ -304,11 +337,13 @@ def main():
         # 데이터 로드 시도
         raw_df, error_msg = load_data()
 
-        # 데이터 로드 실패 시 더미 데이터 사용 및 에러 표시
+        # 데이터 로드 실패 시 에러 표시
         if raw_df is None:
-            st.error(f"⚠️ 데이터 로드 실패: {error_msg}")
-            st.warning("🔄 시뮬레이션 모드로 전환합니다 (샘플 데이터 사용).")
-            raw_df = create_dummy_data()
+            st.error("⚠️ 데이터 로드 실패")
+            with st.expander("상세 오류 내용 보기"):
+                st.code(error_msg)
+            st.info("ℹ️ 'historical_data_3y.csv' 파일이 현재 디렉토리에 있는지 확인해주세요.")
+            return
 
         if raw_df.empty:
             st.error("데이터프레임이 비어 있습니다.")
@@ -394,7 +429,7 @@ def main():
             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
             height=600
         )
-        fig.update_yaxes(title_text="가격 ($)", row=1, col=1)
+        fig.update_yaxes(title_text="가격 ($)", autorange=True, row=1, col=1)
         fig.update_yaxes(title_text="성공률 (%)", range=[0, 100], row=2, col=1)
         st.plotly_chart(fig, width="stretch")
         st.markdown("---")
@@ -448,7 +483,8 @@ def main():
         st.subheader("2️⃣ Pull Request 승인 및 병합 (One-Stop Merge)")
 
         if not github_token:
-            st.warning("⚠️ GitHub Token을 입력해야 PR 목록을 불러올 수 있습니다.")
+            st.warning("⚠️ GitHub Token이 입력되지 않았습니다. 상단 설정 메뉴에서 Token을 입력해주세요.")
+            st.info("💡 GitHub Token은 PR 목록을 조회하고 병합하는 데 필수적입니다.")
         else:
             if st.button("🔄 열린 PR 목록 불러오기"):
                 prs, error = fetch_prs(repo_owner, repo_name, github_token)
