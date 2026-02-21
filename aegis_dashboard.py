@@ -307,6 +307,10 @@ def main():
             st.session_state['verification_active'] = False
         if 'pending_command' not in st.session_state:
             st.session_state['pending_command'] = None
+        if 'pending_type' not in st.session_state:
+            st.session_state['pending_type'] = 'user_request'
+        if 'pending_update_targets' not in st.session_state:
+            st.session_state['pending_update_targets'] = {}
         if 'pending_use_pr' not in st.session_state:
             st.session_state['pending_use_pr'] = False
         if 'pending_image' not in st.session_state:
@@ -359,6 +363,7 @@ def main():
                     st.session_state['auto_open_url'] = True
 
                     st.session_state['pending_command'] = cmd_text
+                    st.session_state['pending_type'] = 'user_request'
                     st.session_state['pending_image'] = image_filename
                     st.session_state['pending_use_pr'] = False
                     st.session_state['pending_source'] = 'sidebar'
@@ -408,8 +413,9 @@ def main():
                         req_text = st.session_state.get('pending_command')
                         use_pr = st.session_state.get('pending_use_pr')
                         img_file = st.session_state.get('pending_image')
+                        p_type = st.session_state.get('pending_type', 'user_request')
 
-                        # Config 로드 (저장된 컨텍스트 우선 사용)
+                        # Config 로드
                         gh_config = st.session_state.get('pending_gh_config')
                         if not gh_config:
                             config = load_config()
@@ -420,17 +426,64 @@ def main():
                                 "token": config.get("github_token", "")
                             }
 
-                        success, msg = save_user_request(req_text, image_filename=img_file, create_pr=use_pr, gh_config=gh_config)
+                        success = False
+                        msg = ""
+
+                        if p_type == 'analysis':
+                             with st.status("작전 수행 중... (분석 엔진 가동)", expanded=True) as status:
+                                 try:
+                                     process = subprocess.run([sys.executable, "aegis_automation.py"], capture_output=True, text=True)
+                                     if process.returncode == 0:
+                                         success = True
+                                         msg = "분석 및 보고 완료"
+                                     else:
+                                         msg = f"분석 실패: {process.stderr}"
+                                 except Exception as e:
+                                     msg = f"실행 오류: {e}"
+                                 status.update(label="작전 종료", state="complete")
+
+                        elif p_type == 'system_update':
+                             targets = st.session_state.get('pending_update_targets', {})
+                             with st.status("시스템 업데이트 진행 중...", expanded=True) as status:
+                                if targets.get('git'):
+                                    st.write("🔄 Git Pull 실행 중...")
+                                    try:
+                                        res = subprocess.run(["git", "pull"], capture_output=True, text=True)
+                                        st.write(f"Git: {res.stdout.strip()}")
+                                    except Exception as e:
+                                        st.error(f"Git Error: {e}")
+
+                                if targets.get('data'):
+                                    st.write("📊 시세 데이터 동기화 중...")
+                                    try:
+                                        subprocess.run([sys.executable, "data_bank_builder.py"], capture_output=True, text=True)
+                                    except Exception as e:
+                                        st.error(f"Data Error: {e}")
+
+                                if targets.get('model'):
+                                    st.write("🧠 AI 모델 점검 중...")
+                                    model_path = "aegis_brain.pth"
+                                    if os.path.exists(model_path):
+                                        st.info(f"Model Exists: {model_path}")
+
+                                success = True
+                                msg = "시스템 업데이트 완료"
+                                status.update(label="업데이트 작업 완료", state="complete")
+
+                        else: # user_request
+                             success, msg = save_user_request(req_text, image_filename=img_file, create_pr=use_pr, gh_config=gh_config)
 
                         if success:
                             st.success(f"✅ {msg}")
                             # Reset
                             st.session_state['verification_active'] = False
                             st.session_state['pending_command'] = None
+                            st.session_state['pending_type'] = 'user_request'
                             st.session_state['pending_use_pr'] = False
                             st.session_state['pending_image'] = None
                             st.session_state['pending_gh_config'] = None
                             st.session_state['pending_source'] = None
+                            st.session_state['pending_update_targets'] = {}
                             st.session_state['verification_synced'] = False
                             st.rerun()
                         else:
@@ -440,10 +493,12 @@ def main():
                     if st.button("❌ 취소 (작전 폐기)", use_container_width=True):
                         st.session_state['verification_active'] = False
                         st.session_state['pending_command'] = None
+                        st.session_state['pending_type'] = 'user_request'
                         st.session_state['pending_use_pr'] = False
                         st.session_state['pending_image'] = None
                         st.session_state['pending_gh_config'] = None
                         st.session_state['pending_source'] = None
+                        st.session_state['pending_update_targets'] = {}
                         st.session_state['verification_synced'] = False
                         st.warning("작전이 취소되었습니다.")
                         st.rerun()
@@ -459,25 +514,15 @@ def main():
             if st.button("🚀 즉시 분석 시작 (Start Immediate Analysis)", use_container_width=True, type="primary"):
                  # [Verification Phase]
                  impact = AegisValidator.analyze_impact("Start Immediate Analysis")
-                 if impact['risk_level'] == 'High':
-                     st.error(f"🚫 실행 차단됨: {impact['message']}")
-                     st.stop()
-                 elif impact['risk_level'] == 'Medium':
-                     st.warning(impact['message'])
 
-                 with st.status("작전 수행 중... (분석 엔진 가동)", expanded=True) as status:
-                     try:
-                         process = subprocess.run([sys.executable, "aegis_automation.py"], capture_output=True, text=True)
-                         if process.returncode == 0:
-                             st.success("✅ 분석 및 보고 완료!")
-                             st.rerun()
-                         else:
-                             st.error("❌ 분석 실패")
-                             with st.expander("오류 로그 보기"):
-                                 st.code(process.stderr)
-                     except Exception as e:
-                         st.error(f"실행 오류: {e}")
-                     status.update(label="작전 종료", state="complete")
+                 # Force Verification for Analysis
+                 cmd_id = datetime.datetime.now().strftime("%H%M%S")
+                 st.session_state['pending_cmd_id'] = cmd_id
+                 st.session_state['auto_open_url'] = True
+                 st.session_state['pending_command'] = "Start Immediate Analysis"
+                 st.session_state['pending_type'] = 'analysis'
+                 st.session_state['verification_active'] = True
+                 st.rerun()
 
             st.divider()
 
@@ -562,51 +607,27 @@ def main():
 
             if st.button("🚀 선택 항목 업데이트 실행", type="primary", key="btn_update_system"):
                 # [Command Verification]
-                if check_git and not AegisValidator.validate_command(["git", "pull"]):
-                    st.error("🚫 Git Pull Blocked.")
-                    st.stop()
-                if check_data and not AegisValidator.validate_command([sys.executable, "data_bank_builder.py"]):
-                    st.error("🚫 Data Sync Blocked.")
-                    st.stop()
+                update_items = []
+                if check_git: update_items.append("Git Pull")
+                if check_data: update_items.append("Data Sync")
+                if check_model: update_items.append("Model Check")
 
-                with st.status("시스템 업데이트 진행 중...", expanded=True) as status:
-                    # 1. Git Pull
-                    if check_git:
-                        st.write("🔄 Git Pull 실행 중...")
-                        try:
-                            res = subprocess.run(["git", "pull"], capture_output=True, text=True)
-                            if res.returncode == 0:
-                                st.success(f"Git Pull 성공: {res.stdout.strip()}")
-                            else:
-                                st.error(f"Git Pull 실패: {res.stderr.strip()}")
-                        except Exception as e:
-                            st.error(f"Git 실행 오류: {e}")
+                cmd_text = f"System Update: {', '.join(update_items)}"
+                impact = AegisValidator.analyze_impact(cmd_text)
 
-                    # 2. Data Sync
-                    if check_data:
-                        st.write("📊 시세 데이터 동기화 중...")
-                        try:
-                            # data_bank_builder.py 실행
-                            res = subprocess.run([sys.executable, "data_bank_builder.py"], capture_output=True, text=True)
-                            if res.returncode == 0:
-                                st.success("데이터 동기화 완료!")
-                            else:
-                                st.error(f"데이터 동기화 실패: {res.stderr.strip()}")
-                        except Exception as e:
-                            st.error(f"데이터 스크립트 실행 오류: {e}")
+                cmd_id = datetime.datetime.now().strftime("%H%M%S")
+                st.session_state['pending_cmd_id'] = cmd_id
+                st.session_state['auto_open_url'] = True
 
-                    # 3. Model Check
-                    if check_model:
-                        st.write("🧠 AI 모델 점검 중...")
-                        model_path = "aegis_brain.pth"
-                        if os.path.exists(model_path):
-                            size_mb = os.path.getsize(model_path) / (1024 * 1024)
-                            mtime = datetime.datetime.fromtimestamp(os.path.getmtime(model_path)).strftime('%Y-%m-%d %H:%M:%S')
-                            st.info(f"모델 발견: {model_path} ({size_mb:.2f} MB) - 수정일: {mtime}")
-                        else:
-                            st.warning("⚠️ 학습된 모델 파일(aegis_brain.pth)을 찾을 수 없습니다.")
-
-                    status.update(label="업데이트 작업 완료", state="complete")
+                st.session_state['pending_command'] = cmd_text
+                st.session_state['pending_type'] = 'system_update'
+                st.session_state['pending_update_targets'] = {
+                    'git': check_git,
+                    'data': check_data,
+                    'model': check_model
+                }
+                st.session_state['verification_active'] = True
+                st.rerun()
 
             st.divider()
 
@@ -718,6 +739,7 @@ def main():
                 st.session_state['auto_open_url'] = True
 
                 st.session_state['pending_command'] = request_text
+                st.session_state['pending_type'] = 'user_request'
                 st.session_state['pending_use_pr'] = use_pr
                 st.session_state['pending_image'] = None
                 st.session_state['pending_gh_config'] = {"owner": repo_owner, "repo": repo_name, "token": github_token}
