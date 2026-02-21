@@ -132,4 +132,5 @@ class AegisValidator:
                     break
 
         print(f"🧠 [AegisValidator] Impact Analysis: {risk_level} Risk - {message}")
-        return {"risk_level": risk_level, "message": message}
+        # [Manual Verification Enforced] All commands require Jules session verification
+        return {"risk_level": risk_level, "message": message, "requires_verification": True}
