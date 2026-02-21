@@ -2,10 +2,16 @@ import os
 import sys
 import importlib.util
 import ast
-import torch
-import torch.nn as nn
 import warnings
 import traceback
+import urllib.parse
+
+try:
+    import torch
+    import torch.nn as nn
+except ImportError:
+    torch = None
+    nn = None
 
 warnings.filterwarnings('ignore')
 
@@ -43,6 +49,10 @@ class AegisValidator:
              print("   ℹ️ Model structure check skipped (Target is not a Brain module).")
              return True
 
+        if torch is None:
+             print("   ⚠️ Torch not installed. Skipping model structure check.")
+             return False
+
         # 2. Dynamic Import & Structure Check
         try:
             spec = importlib.util.spec_from_file_location("aegis_evolution_proposal", filepath)
@@ -77,60 +87,46 @@ class AegisValidator:
             return False
 
     @staticmethod
-    def validate_command(command):
+    def validate_command(command_text):
         """
-        Validates a shell command for safety.
-        Returns: True if safe, False if unsafe.
+        사령관의 명령을 분석하고 무조건 세션 검증 상태로 전환합니다.
+        (자동 승인 로직을 완전히 제거함)
         """
-        if isinstance(command, list):
-            cmd_str = " ".join(command)
-        else:
-            cmd_str = str(command)
+        if isinstance(command_text, list):
+            command_text = " ".join(command_text)
 
-        # Blacklist of dangerous commands/keywords
-        dangerous_keywords = [
-            "rm -rf", "mkfs", "dd if=", ":(){ :|:& };:", "shutdown", "reboot",
-            "chmod 777", "chown root", "wget http", "curl http", # Prefer https
-            "> /dev/sda", "> /dev/mem"
-        ]
+        # 1. 명령어를 URL 안전 형식으로 인코딩 (딥 링크용)
+        encoded_command = urllib.parse.quote(command_text)
+        session_url = f"https://jules.google.com/session?q={encoded_command}"
 
-        for keyword in dangerous_keywords:
-            if keyword in cmd_str:
-                print(f"🛑 [AegisValidator] Unsafe Command Blocked: {cmd_str} (Reason: '{keyword}')")
-                return False
+        # 2. 분석 결과 생성 (모든 명령을 '검증 필요'로 설정)
+        # 이제 Low Risk라도 Auto-Approved가 절대 발생하지 않습니다.
+        report = {
+            "risk_level": "Verification Required",
+            "impact_analysis": "Manual verification forced by Commander Isangjin.",
+            "status": "Pending Session Review", # 자동 승인(Auto-Approved) 문구 삭제
+            "session_link": session_url
+        }
 
-        print(f"✅ [AegisValidator] Command Verified Safe: {cmd_str}")
-        return True
+        return report
+
+    @staticmethod
+    def check_dangerous_keywords(command_text):
+        """파괴적인 명령어에 대한 2차 경고 로직"""
+        if isinstance(command_text, list):
+            command_text = " ".join(command_text)
+
+        dangerous = ["rm -rf", "delete", "destroy", "format"]
+        for word in dangerous:
+            if word in command_text.lower():
+                return True
+        return False
 
     @staticmethod
     def analyze_impact(action_description):
         """
         Performs a 'Critical Thinking' risk assessment on a requested action.
-        Returns a dictionary with 'risk_level' and 'message'.
+        This now strictly enforces session verification for all actions.
         """
-        action_lower = action_description.lower()
-
-        # High Risk Keywords
-        high_risk_keywords = ["delete", "destroy", "format", "wipe", "reset database", "force push"]
-        # Medium Risk Keywords
-        medium_risk_keywords = ["update", "modify", "change", "pull", "merge", "restart"]
-
-        risk_level = "Low"
-        message = "Routine operation. System stability expected to remain high."
-
-        for keyword in high_risk_keywords:
-            if keyword in action_lower:
-                risk_level = "High"
-                message = f"⚠️ CRITICAL WARNING: Action contains destructive keyword '{keyword}'. Proceed with extreme caution."
-                break
-
-        if risk_level == "Low":
-            for keyword in medium_risk_keywords:
-                if keyword in action_lower:
-                    risk_level = "Medium"
-                    message = f"ℹ️ Notice: Action involves system modification ('{keyword}'). Verify backups if necessary."
-                    break
-
-        print(f"🧠 [AegisValidator] Impact Analysis: {risk_level} Risk - {message}")
-        # [Manual Verification Enforced] All commands require Jules session verification
-        return {"risk_level": risk_level, "message": message, "requires_verification": True}
+        # Redirect to validate_command to enforce single source of truth
+        return AegisValidator.validate_command(action_description)
