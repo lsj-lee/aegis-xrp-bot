@@ -716,36 +716,11 @@ def main():
 
             st.divider()
 
-            # Section 3: Commander's Orders
-            st.subheader("3️⃣ 사령관 명령 입력 (Commander's Orders)")
-            st.caption("추가 변경 사항이나 개선 요청을 입력하세요. 줄스(Jules)가 최우선으로 반영합니다.")
-            with st.form("commander_request_form"):
-                request_text = st.text_area("💡 추가 변경/요청 사항 입력", placeholder="예: 예약 시간을 5분 단위로 더 쪼개줘.", height=100)
-                use_pr = st.checkbox("Pull Request 생성 (권장)", value=True, help="체크 시, 변경 사항을 바로 반영하지 않고 PR을 생성하여 승인 절차를 거칩니다.")
-                submit_request = st.form_submit_button("📩 명령 전송 (Send Command)")
+            # Section 3: Connect to Jules Session
+            st.subheader("3️⃣ 줄스 전략 지휘소 연결 (Connect to Jules Session)")
+            st.caption("외부 보안 채널을 통해 줄스(Jules)에게 직접 명령을 하달합니다.")
 
-            if submit_request and request_text:
-                # [Impact Analysis]
-                impact = AegisValidator.analyze_impact(request_text)
-
-                # [Force Verification] All commands now require manual verification
-                if impact['risk_level'] == 'High':
-                    st.error(f"🚫 Critical Risk: {impact['message']}")
-                else:
-                    st.warning(f"⚠️ Verification Required: {impact['message']}")
-
-                cmd_id = datetime.datetime.now().strftime("%H%M%S")
-                st.session_state['pending_cmd_id'] = cmd_id
-                st.session_state['auto_open_url'] = True
-
-                st.session_state['pending_command'] = request_text
-                st.session_state['pending_type'] = 'user_request'
-                st.session_state['pending_use_pr'] = use_pr
-                st.session_state['pending_image'] = None
-                st.session_state['pending_gh_config'] = {"owner": repo_owner, "repo": repo_name, "token": github_token}
-                st.session_state['pending_source'] = 'main'
-                st.session_state['verification_active'] = True
-                st.rerun()
+            st.link_button("🚀 줄스 전략 지휘소 연결 (Connect to Jules Session)", "https://jules.google.com/session", type="primary", use_container_width=True)
 
         elif menu == "예약 및 스케줄 관리":
             st.title("🗓️ 예약 및 스케줄 관리 센터 (Scheduling Center)")
