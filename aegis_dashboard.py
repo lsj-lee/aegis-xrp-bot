@@ -331,46 +331,11 @@ def main():
         # 사이드바 메뉴 선택
         menu = st.sidebar.radio("메뉴 선택", ["대시보드", "통합 커맨드 센터", "예약 및 스케줄 관리"])
 
-        # 사이드바: Commander's Log
+        # 사이드바: Commander's Log -> Direct Link
         st.sidebar.markdown("---")
-        with st.sidebar.expander("📝 Commander's Log", expanded=False):
-            cmd_input = st.text_area("명령 입력", placeholder="지시사항을 입력하세요...", key="sidebar_cmd_input")
-            uploaded_file = st.file_uploader("이미지 첨부 (선택)", type=['png', 'jpg', 'jpeg'], key="sidebar_img_upload")
-
-            if st.button("💾 전송 (Push)", key="sidebar_save_cmd"):
-                if cmd_input or uploaded_file:
-                    image_filename = None
-                    if uploaded_file:
-                        try:
-                            if not os.path.exists(COMMAND_IMAGES_DIR):
-                                os.makedirs(COMMAND_IMAGES_DIR)
-                            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-                            image_filename = f"{timestamp}_{uploaded_file.name}"
-                            save_path = os.path.join(COMMAND_IMAGES_DIR, image_filename)
-                            with open(save_path, "wb") as f:
-                                f.write(uploaded_file.getbuffer())
-                            st.sidebar.success(f"이미지 업로드됨: {image_filename}")
-                        except Exception as e:
-                            st.sidebar.error(f"이미지 처리 실패: {e}")
-
-                    # [상태 업데이트 -> 검증 모드 진입 or 자동 실행]
-                    cmd_text = cmd_input if cmd_input else "(이미지 전송)"
-                    impact = AegisValidator.analyze_impact(cmd_text)
-
-                    # [Force Verification] All commands now require manual verification
-                    cmd_id = datetime.datetime.now().strftime("%H%M%S")
-                    st.session_state['pending_cmd_id'] = cmd_id
-                    st.session_state['auto_open_url'] = True
-
-                    st.session_state['pending_command'] = cmd_text
-                    st.session_state['pending_type'] = 'user_request'
-                    st.session_state['pending_image'] = image_filename
-                    st.session_state['pending_use_pr'] = False
-                    st.session_state['pending_source'] = 'sidebar'
-                    st.session_state['verification_active'] = True
-                    st.rerun()
-                else:
-                    st.warning("내용을 입력하거나 이미지를 첨부하세요.")
+        with st.sidebar.expander("🚀 전략 지휘소 연결", expanded=True):
+            st.caption("줄스(Jules)에게 직접 명령을 하달합니다.")
+            st.link_button("🚀 지휘소 연결 (Session)", "https://jules.google.com/session", type="primary", use_container_width=True)
 
         # [검증 대기 모드: Verification Phase]
         if st.session_state.get('verification_active'):
@@ -441,34 +406,6 @@ def main():
                                  except Exception as e:
                                      msg = f"실행 오류: {e}"
                                  status.update(label="작전 종료", state="complete")
-
-                        elif p_type == 'system_update':
-                             targets = st.session_state.get('pending_update_targets', {})
-                             with st.status("시스템 업데이트 진행 중...", expanded=True) as status:
-                                if targets.get('git'):
-                                    st.write("🔄 Git Pull 실행 중...")
-                                    try:
-                                        res = subprocess.run(["git", "pull"], capture_output=True, text=True)
-                                        st.write(f"Git: {res.stdout.strip()}")
-                                    except Exception as e:
-                                        st.error(f"Git Error: {e}")
-
-                                if targets.get('data'):
-                                    st.write("📊 시세 데이터 동기화 중...")
-                                    try:
-                                        subprocess.run([sys.executable, "data_bank_builder.py"], capture_output=True, text=True)
-                                    except Exception as e:
-                                        st.error(f"Data Error: {e}")
-
-                                if targets.get('model'):
-                                    st.write("🧠 AI 모델 점검 중...")
-                                    model_path = "aegis_brain.pth"
-                                    if os.path.exists(model_path):
-                                        st.info(f"Model Exists: {model_path}")
-
-                                success = True
-                                msg = "시스템 업데이트 완료"
-                                status.update(label="업데이트 작업 완료", state="complete")
 
                         else: # user_request
                              success, msg = save_user_request(req_text, image_filename=img_file, create_pr=use_pr, gh_config=gh_config)
@@ -606,28 +543,32 @@ def main():
                 check_model = st.checkbox("AI 모델 가중치 확인", value=True)
 
             if st.button("🚀 선택 항목 업데이트 실행", type="primary", key="btn_update_system"):
-                # [Command Verification]
-                update_items = []
-                if check_git: update_items.append("Git Pull")
-                if check_data: update_items.append("Data Sync")
-                if check_model: update_items.append("Model Check")
+                with st.status("시스템 업데이트 진행 중... (System Update High-pass)", expanded=True) as status:
+                    if check_git:
+                        st.write("🔄 Git Pull 실행 중...")
+                        try:
+                            res = subprocess.run(["git", "pull"], capture_output=True, text=True)
+                            st.write(f"Git: {res.stdout.strip()}")
+                        except Exception as e:
+                            st.error(f"Git Error: {e}")
 
-                cmd_text = f"System Update: {', '.join(update_items)}"
-                impact = AegisValidator.analyze_impact(cmd_text)
+                    if check_data:
+                        st.write("📊 시세 데이터 동기화 중...")
+                        try:
+                            subprocess.run([sys.executable, "data_bank_builder.py"], capture_output=True, text=True)
+                            st.write("✅ 데이터 동기화 완료")
+                        except Exception as e:
+                            st.error(f"Data Error: {e}")
 
-                cmd_id = datetime.datetime.now().strftime("%H%M%S")
-                st.session_state['pending_cmd_id'] = cmd_id
-                st.session_state['auto_open_url'] = True
+                    if check_model:
+                        st.write("🧠 AI 모델 점검 중...")
+                        model_path = "aegis_brain.pth"
+                        if os.path.exists(model_path):
+                            st.info(f"Model Exists: {model_path}")
+                        else:
+                            st.warning("모델 파일을 찾을 수 없습니다.")
 
-                st.session_state['pending_command'] = cmd_text
-                st.session_state['pending_type'] = 'system_update'
-                st.session_state['pending_update_targets'] = {
-                    'git': check_git,
-                    'data': check_data,
-                    'model': check_model
-                }
-                st.session_state['verification_active'] = True
-                st.rerun()
+                    status.update(label="업데이트 작업 완료", state="complete")
 
             st.divider()
 
