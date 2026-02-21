@@ -10,6 +10,7 @@ import requests
 import json
 import datetime
 import re
+import urllib.parse
 
 # --- [페이지 설정: 넓은 화면 모드] ---
 st.set_page_config(
@@ -313,6 +314,8 @@ def main():
             st.session_state['pending_source'] = None
         if 'pending_gh_config' not in st.session_state:
             st.session_state['pending_gh_config'] = None
+        if 'verification_synced' not in st.session_state:
+            st.session_state['verification_synced'] = False
 
         st.sidebar.title("🛡️ AEGIS SYSTEM")
 
@@ -379,12 +382,30 @@ def main():
             st.divider()
             with st.container(border=True):
                 st.subheader("⚠️ 작전 검증 대기 중 (Verification Pending)")
-                st.info("줄스 세션에서 먼저 작전 계획을 검토하십시오. 검증이 완료된 후 승인해야 PR이 생성됩니다.")
-                st.markdown("[👉 Google Jules Session 바로가기](https://jules.google.com/session)")
+
+                # [Deep Link Generation]
+                pending_cmd = st.session_state.get('pending_command', '')
+                encoded_cmd = urllib.parse.quote(pending_cmd) if pending_cmd else ''
+                deep_link = f"https://jules.google.com/session?q={encoded_cmd}"
+
+                st.info("줄스 세션에서 먼저 작전 계획을 검토하십시오. (명령 자동 입력됨)")
+                st.markdown(f"[👉 Google Jules Session 바로가기 (Auto-Input)]({deep_link})")
+
+                # [Background Synchronization Simulation]
+                is_synced = st.session_state.get('verification_synced', False)
+
+                if not is_synced:
+                    st.warning("🔄 세션 검증 결과 동기화 대기 중... (Waiting for Session Verification)")
+                    if st.button("🔄 Sync Verification Status (세션 결과 동기화)", use_container_width=True):
+                        st.session_state['verification_synced'] = True
+                        st.rerun()
+                else:
+                    st.success("✅ 세션 검증 확인됨 (Verified). 승인 가능합니다.")
 
                 v_col1, v_col2 = st.columns(2)
                 with v_col1:
-                    if st.button("✅ 검증 완료 (승인 및 실행)", use_container_width=True, type="primary"):
+                    btn_label = "✅ 승인 및 실행 (Execute)" if is_synced else "🔒 승인 대기 (Locked)"
+                    if st.button(btn_label, use_container_width=True, type="primary", disabled=not is_synced):
                         req_text = st.session_state.get('pending_command')
                         use_pr = st.session_state.get('pending_use_pr')
                         img_file = st.session_state.get('pending_image')
@@ -411,6 +432,7 @@ def main():
                             st.session_state['pending_image'] = None
                             st.session_state['pending_gh_config'] = None
                             st.session_state['pending_source'] = None
+                            st.session_state['verification_synced'] = False
                             st.rerun()
                         else:
                             st.error(f"❌ {msg}")
@@ -423,6 +445,7 @@ def main():
                         st.session_state['pending_image'] = None
                         st.session_state['pending_gh_config'] = None
                         st.session_state['pending_source'] = None
+                        st.session_state['verification_synced'] = False
                         st.warning("작전이 취소되었습니다.")
                         st.rerun()
             st.divider()
