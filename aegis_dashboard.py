@@ -11,6 +11,7 @@ import json
 import datetime
 import re
 import urllib.parse
+import webbrowser
 
 # --- [페이지 설정: 넓은 화면 모드] ---
 st.set_page_config(
@@ -316,6 +317,10 @@ def main():
             st.session_state['pending_gh_config'] = None
         if 'verification_synced' not in st.session_state:
             st.session_state['verification_synced'] = False
+        if 'pending_cmd_id' not in st.session_state:
+            st.session_state['pending_cmd_id'] = "0000"
+        if 'auto_open_url' not in st.session_state:
+            st.session_state['auto_open_url'] = False
 
         st.sidebar.title("🛡️ AEGIS SYSTEM")
 
@@ -348,32 +353,17 @@ def main():
                     cmd_text = cmd_input if cmd_input else "(이미지 전송)"
                     impact = AegisValidator.analyze_impact(cmd_text)
 
-                    if impact['risk_level'] == 'High':
-                        st.session_state['pending_command'] = cmd_text
-                        st.session_state['pending_image'] = image_filename
-                        st.session_state['pending_use_pr'] = False
-                        st.session_state['pending_source'] = 'sidebar'
-                        st.session_state['verification_active'] = True
-                        st.rerun()
-                    else:
-                        st.sidebar.info(f"⚡ [Auto-Verification] Risk: {impact['risk_level']}. Executing...")
+                    # [Force Verification] All commands now require manual verification
+                    cmd_id = datetime.datetime.now().strftime("%H%M%S")
+                    st.session_state['pending_cmd_id'] = cmd_id
+                    st.session_state['auto_open_url'] = True
 
-                        config = load_config()
-                        def_owner, def_repo = get_github_repo_info()
-                        gh_config = {
-                            "owner": config.get("github_owner", def_owner),
-                            "repo": config.get("github_repo", def_repo),
-                            "token": config.get("github_token", "")
-                        }
-
-                        report = f"## 🛡️ Jules' Automatic Verification Report\n- **Risk Level:** {impact['risk_level']}\n- **Impact Analysis:** {impact['message']}\n- **Status:** Auto-Approved"
-
-                        success, msg = save_user_request(cmd_text, image_filename=image_filename, create_pr=True, gh_config=gh_config, verification_report=report)
-
-                        if success:
-                            st.sidebar.success(f"✅ {msg}")
-                        else:
-                            st.sidebar.error(f"❌ {msg}")
+                    st.session_state['pending_command'] = cmd_text
+                    st.session_state['pending_image'] = image_filename
+                    st.session_state['pending_use_pr'] = False
+                    st.session_state['pending_source'] = 'sidebar'
+                    st.session_state['verification_active'] = True
+                    st.rerun()
                 else:
                     st.warning("내용을 입력하거나 이미지를 첨부하세요.")
 
@@ -385,10 +375,19 @@ def main():
 
                 # [Deep Link Generation]
                 pending_cmd = st.session_state.get('pending_command', '')
-                encoded_cmd = urllib.parse.quote(pending_cmd) if pending_cmd else ''
+                cmd_id = st.session_state.get('pending_cmd_id', '0000')
+
+                # Enhanced Prompt for Jules
+                full_prompt = f"사령관님의 #{cmd_id}번 명령을 분석 중입니다.\n\n[System: Execute Immediate Analysis]\nOrder: {pending_cmd}"
+                encoded_cmd = urllib.parse.quote(full_prompt) if pending_cmd else ''
                 deep_link = f"https://jules.google.com/session?q={encoded_cmd}"
 
-                st.info("줄스 세션에서 먼저 작전 계획을 검토하십시오. (명령 자동 입력됨)")
+                # [Auto-Open Session]
+                if st.session_state.get('auto_open_url', False):
+                    webbrowser.open_new_tab(deep_link)
+                    st.session_state['auto_open_url'] = False
+
+                st.info(f"줄스 세션에서 먼저 작전 계획(#{cmd_id})을 검토하십시오. (자동 연결됨)")
                 st.markdown(f"[👉 Google Jules Session 바로가기 (Auto-Input)]({deep_link})")
 
                 # [Background Synchronization Simulation]
@@ -708,31 +707,23 @@ def main():
                 # [Impact Analysis]
                 impact = AegisValidator.analyze_impact(request_text)
 
+                # [Force Verification] All commands now require manual verification
                 if impact['risk_level'] == 'High':
                     st.error(f"🚫 Critical Risk: {impact['message']}")
-                    # High Risk -> Force Manual Verification
-                    st.session_state['pending_command'] = request_text
-                    st.session_state['pending_use_pr'] = use_pr
-                    st.session_state['pending_image'] = None
-                    st.session_state['pending_gh_config'] = {"owner": repo_owner, "repo": repo_name, "token": github_token}
-                    st.session_state['pending_source'] = 'main'
-                    st.session_state['verification_active'] = True
-                    st.rerun()
                 else:
-                    # Low/Medium Risk -> Auto Execute
-                    st.info(f"⚡ [Auto-Verification] Risk: {impact['risk_level']}. Executing...")
+                    st.warning(f"⚠️ Verification Required: {impact['message']}")
 
-                    gh_config = {"owner": repo_owner, "repo": repo_name, "token": github_token}
-                    report = f"## 🛡️ Jules' Automatic Verification Report\n- **Risk Level:** {impact['risk_level']}\n- **Impact Analysis:** {impact['message']}\n- **Status:** Auto-Approved"
+                cmd_id = datetime.datetime.now().strftime("%H%M%S")
+                st.session_state['pending_cmd_id'] = cmd_id
+                st.session_state['auto_open_url'] = True
 
-                    # Force PR creation for Auto-Verification audit trail
-                    success, msg = save_user_request(request_text, image_filename=None, create_pr=True, gh_config=gh_config, verification_report=report)
-
-                    if success:
-                        st.success(f"✅ {msg}")
-                        st.rerun()
-                    else:
-                        st.error(f"❌ {msg}")
+                st.session_state['pending_command'] = request_text
+                st.session_state['pending_use_pr'] = use_pr
+                st.session_state['pending_image'] = None
+                st.session_state['pending_gh_config'] = {"owner": repo_owner, "repo": repo_name, "token": github_token}
+                st.session_state['pending_source'] = 'main'
+                st.session_state['verification_active'] = True
+                st.rerun()
 
         elif menu == "예약 및 스케줄 관리":
             st.title("🗓️ 예약 및 스케줄 관리 센터 (Scheduling Center)")
