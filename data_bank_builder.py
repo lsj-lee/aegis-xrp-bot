@@ -5,6 +5,7 @@ import os
 import yfinance as yf
 import pandas as pd
 import numpy as np
+import requests # 업비트 통신용 무기 추가
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -17,13 +18,11 @@ class AegisAllTimeCollector:
         self.sheet_name = sheet_name
 
     def clean_df(self, df):
-        """yfinance 최신 버전의 다중 인덱스(이중 표 구조)를 강제로 평탄화하여 오류 원천 차단 [cite: 2026-02-11]"""
         if isinstance(df.columns, pd.MultiIndex):
             df.columns = df.columns.get_level_values(0)
         return df
 
     def calculate_rsi(self, series, window=14):
-        # 배열을 순수 1차원 숫자로 강제 변환
         clean_series = pd.Series(np.ravel(series))
         delta = clean_series.diff()
         gain = (delta.where(delta > 0, 0)).rolling(window=window).mean()
@@ -31,19 +30,28 @@ class AegisAllTimeCollector:
         rs = gain / loss
         return 100 - (100 / (1 + rs))
 
-    def get_all_time_history(self, ticker="XRP-USD"):
+    def get_upbit_price(self, ticker="KRW-XRP"):
+        """업비트 실시간 원화 가격 스캔 [cite: 2026-02-11]"""
+        try:
+            url = f"https://api.upbit.com/v1/ticker?markets={ticker}"
+            response = requests.get(url, timeout=5).json()
+            return response[0]['trade_price']
+        except Exception as e:
+            print(f"⚠️ 업비트 통신 장애: {e}")
+            return "N/A"
+
+    def get_all_time_history(self, ticker="XRP-USD", upbit_ticker="KRW-XRP"):
         results = {}
-        print(f"📡 [{ticker}] 상장 이후 최대 기간(Max) 데이터 스캔 중...")
+        print(f"📡 [{ticker}] 글로벌 달러 및 업비트({upbit_ticker}) 데이터 동시 스캔 중...")
 
         try:
-            # 1. 1일봉 기준 전체 역사(Max) 데이터 로드
+            # 업비트 실시간 원화 가격 확보
+            upbit_price = self.get_upbit_price(upbit_ticker)
+            
             df_max = yf.download(ticker, period="max", interval="1d", progress=False)
             if df_max.empty: return {}
-            
-            # 다중 껍데기 제거 (핵심 해결책)
             df_max = self.clean_df(df_max) 
 
-            # 가장 안전한 방식(numpy)으로 스칼라 숫자 추출
             ath = float(np.nanmax(df_max['High'].values))
             atl = float(np.nanmin(df_max['Low'].values))
             current_price = float(df_max['Close'].values[-1])
@@ -51,13 +59,12 @@ class AegisAllTimeCollector:
 
             results['역사적_분석'] = {
                 "상장일": str(df_max.index[0].date()),
-                "전체_데이터_일수": len(df_max),
                 "역대_최고점(ATH)": round(ath, 4),
-                "역대_최저점(ATL)": round(atl, 4),
-                "고점_대비_하락률": f"{round(drawdown, 2)}%"
+                "고점_대비_하락률": f"{round(drawdown, 2)}%",
+                "현재가(USD)": current_price,
+                "현재가(업비트KRW)": upbit_price # AI에게 넘겨줄 핵심 데이터
             }
 
-            # 2. 모든 시간봉 최대치 분석
             intervals = {
                 "1시간봉": {"int": "1h", "period": "730d"},
                 "1일봉": {"int": "1d", "period": "max"},
@@ -69,7 +76,7 @@ class AegisAllTimeCollector:
             for name, cfg in intervals.items():
                 try:
                     df = yf.download(ticker, period=cfg['period'], interval=cfg['int'], progress=False)
-                    df = self.clean_df(df) # 껍데기 제거
+                    df = self.clean_df(df)
                     if len(df) > 15:
                         rsi = self.calculate_rsi(df['Close']).iloc[-1]
                         ma20 = float(np.nanmean(df['Close'].values[-20:]))
@@ -80,7 +87,6 @@ class AegisAllTimeCollector:
                         }
                 except: continue
 
-            # 3. 6개월/1년봉 최대치 리샘플링
             monthly_df = yf.download(ticker, period="max", interval="1mo", progress=False)
             monthly_df = self.clean_df(monthly_df)
             clean_close = pd.Series(np.ravel(monthly_df['Close']), index=monthly_df.index)
@@ -99,10 +105,9 @@ class AegisAllTimeCollector:
         return results
 
     def collect_all(self):
-        print("🚀 [1단계] AEGIS 4.2 전천후 역사 관측 엔진 (완벽 교정본) 가동...")
-        
-        xrp_history = self.get_all_time_history("XRP-USD")
-        btc_history = self.get_all_time_history("BTC-USD")
+        print("🚀 [1단계] AEGIS 4.3 (업비트 실시간 연동) 관측 엔진 가동...")
+        xrp_history = self.get_all_time_history("XRP-USD", "KRW-XRP")
+        btc_history = self.get_all_time_history("BTC-USD", "KRW-BTC")
         
         try:
             worksheet = self.client.open(self.sheet_name).worksheet("AEGIS_Daily_Report")
@@ -111,16 +116,13 @@ class AegisAllTimeCollector:
 
             storage = {
                 "update_time": pd.Timestamp.now().strftime('%Y-%m-%d %H:%M'),
-                "all_time_analysis": {
-                    "XRP": xrp_history,
-                    "BTC": btc_history
-                },
+                "all_time_analysis": {"XRP": xrp_history, "BTC": btc_history},
                 "payload": payload
             }
             
             with open("collected_data.json", "w", encoding="utf-8") as f:
                 json.dump(storage, f, ensure_ascii=False, indent=4)
-            print(f"✅ 수집 완료: XRP와 BTC의 수치 분석이 완벽히 장전되었습니다.")
+            print(f"✅ 수집 완료: 업비트 실시간 원화 가격 연동이 완료되었습니다.")
             
         except Exception as e:
             print(f"❌ 시트 수집 오류: {e}")
