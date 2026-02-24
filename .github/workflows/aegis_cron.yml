@@ -1,0 +1,50 @@
+name: AEGIS Daily Operations
+
+# 언제 실행할 것인가?
+on:
+  schedule:
+    # 매일 한국 시간 새벽 4시 (UTC 기준 전날 19:00)
+    - cron: '0 19 * * *'
+  workflow_dispatch: # 깃허브 웹에서 수동으로 '실행' 버튼을 누를 수 있게 함
+
+# 무엇을 할 것인가?
+jobs:
+  run-aegis:
+    runs-on: ubuntu-latest # 깃허브의 리눅스 서버 사용
+
+    steps:
+    - name: 📥 1. 저장소 코드 가져오기
+      uses: actions/checkout@v3
+
+    - name: 🐍 2. 파이썬 환경 설정
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+
+    - name: 📦 3. 필수 무기(라이브러리) 장착
+      run: |
+        python -m pip install --upgrade pip
+        pip install gspread google-auth yfinance pandas numpy python-dotenv google-genai
+
+    - name: 🔐 4. 비밀 금고에서 구글 시트 열쇠 복원
+      env:
+        GCP_CREDENTIALS: ${{ secrets.GCP_CREDENTIALS }}
+      run: |
+        echo "$GCP_CREDENTIALS" > "creds xrp coin.json"
+
+    - name: 🚀 5. [1단계] 전천후 수집 엔진 가동
+      run: python data_bank_builder.py
+
+    - name: 🧠 6. [2~4단계] AI 전략 분석 및 타점 계산
+      env:
+        GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      run: python aegis_strategy_ai.py
+
+    - name: 📤 7. 생성된 리포트와 학습 메모리를 깃허브에 자동 저장
+      run: |
+        git config --global user.name "AEGIS-Cloud-Bot"
+        git config --global user.email "aegis-bot@github.com"
+        git add .
+        # 변경된 파일(새로운 리포트 등)이 있을 때만 저장소에 올림
+        git diff --quiet && git diff --staged --quiet || git commit -m "🤖 AEGIS 클라우드 일일 작전 보고서 생성 완료"
+        git push

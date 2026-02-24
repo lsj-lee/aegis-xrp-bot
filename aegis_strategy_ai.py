@@ -4,80 +4,75 @@ from datetime import datetime
 from dotenv import load_dotenv
 from google import genai 
 
-# 1. 환경 설정 로드 [cite: 2026-02-11]
 load_dotenv()
-API_KEY = os.getenv("GEMINI_API_KEY")
 
-def run_integrated_strategy():
-    print("🧠 [2단계] 동적 AI 전략 분석 엔진 기동 중...")
+def run_target_prediction_strategy():
+    print("🧠 [2~4단계] 저점/고점 정밀 타겟팅 및 자가 발전 엔진 가동...")
     
-    # 1. 수집된 가변 데이터 로드 [cite: 2026-02-24]
+    # 1단계 데이터 로드
     try:
         with open("collected_data.json", "r", encoding="utf-8") as f:
-            data_bank = json.load(f)
-            indicators = data_bank.get('payload', [])
-            total_count = data_bank.get('total_items', 0)
+            data = json.load(f)
     except FileNotFoundError:
-        print("❌ 오류: collected_data.json이 없습니다. 1단계를 실행하십시오.")
+        print("❌ 오류: 1단계 수집 데이터가 없습니다. data_bank_builder.py를 먼저 실행하세요.")
         return
 
-    if total_count == 0:
-        print("⚠️ 경고: 수집된 지표가 0개입니다. 시트 내용을 확인하십시오.")
-        return
+    # 3단계: 자가 발전 메모리 로드
+    memory_file = "learning_memory.json"
+    memory = json.load(open(memory_file, "r")) if os.path.exists(memory_file) else []
 
-    # 2. 동적 프롬프트 생성 (지표의 종류와 개수에 무관하게 작동) [cite: 2026-01-30]
-    indicator_summary = ""
-    for idx, item in enumerate(indicators, 1):
-        indicator_summary += f"{idx}. {item['지표']}\n"
-        indicator_summary += f"   - 실시간 수치: {item['실시간_데이터']}\n"
-        indicator_summary += f"   - 사령관의 분석의미: {item['사령관_분석의미']}\n\n"
-
+    client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+    macro_data = data.get('all_time_analysis', {})
+    
+    # AI 프롬프트 (엄격한 지휘 통제)
     prompt = f"""
-    [명령] 사령관 lsj의 지휘소 분석 데이터 기반 통합 전략 수립
-    
-    현재 수집된 총 {total_count}개의 핵심 지표 데이터는 다음과 같다:
-    {indicator_summary}
-    
-    [분석 요구사항]
-    1. 수집된 모든 지표들 사이의 상관관계를 분석하여 현재 시장의 '절대적 국면'을 정의하라.
-    2. 사령관이 직접 작성한 '분석의미'와 '실시간 수치'의 괴리를 찾아내어 기회 혹은 위기 요인을 도출하라.
-    3. 3월 1일 미국 정책 이벤트 등 핵심 일정과 연계하여, 사령관이 지금 즉시 실행해야 할 3가지 우선 작전을 하달하라.
-    4. 분석 내용 중 가장 상징적인 숫자가 있다면 이를 기반으로 작전명을 명명하라.
+    [지휘 지침: 저점/고점 정밀 타겟팅 작전]
+    너의 최우선 임무는 사령관을 위해 코인의 '현재 최저점 여부'와 '단기, 중기, 장기 저점 및 고점'을 분석하여 타점을 제공하는 것이다.
+
+    [분석 데이터]
+    1. 맥북 M5 수학적 역사 데이터: {json.dumps(macro_data, ensure_ascii=False)}
+    2. 사령관 전략 지표: {json.dumps(data.get('payload', []), ensure_ascii=False)}
+    3. 과거 예측 오답 노트 (학습용): {json.dumps(memory[-3:], ensure_ascii=False)}
+
+    [출력 필수 형식 및 제약사항]
+    - 불확실한 미래 가격이나 모호한 정보에 대해서는 단정 짓지 말고 "확실하지 않음" 또는 "알 수 없습니다"라고 명시하라.
+    - 예측되는 타점(가격)을 제시할 때는 반드시 문장 끝에 "(추측입니다)"라고 밝혀라.
+    - 아래 4가지 항목을 정확히 나누어 보고하라:
+      1. 현재 가격 최저점 판별: (현재 가격이 진정한 바닥일 확률 % 및 근거)
+      2. 단기 타점 (1주일~1개월): 예상 저점 및 고점
+      3. 중기 타점 (3개월~6개월): 3월 1일 정책 이벤트 등 반영한 예상 저점 및 고점
+      4. 장기 타점 (1년 이상): 2026년 대불장 사이클을 반영한 예상 저점 및 고점
     """
 
-    # 3. 차세대 엔진(Gemini 2.5) 교신 [cite: 2026-02-24]
-    client = genai.Client(api_key=API_KEY)
-    
-    print(f"📡 {total_count}개의 지표를 Gemini 2.5 본부로 전송 중...")
-    
     try:
-        response = client.models.generate_content(
-            model='gemini-2.5-flash',
-            contents=prompt
-        )
-        
-        report_content = response.text
+        print("📡 Gemini 2.5 본부에서 타점 계산 중...")
+        response = client.models.generate_content(model='gemini-2.5-flash', contents=prompt)
+        report = response.text
 
-        # 4. 출력 및 보고서 파일 저장 [cite: 2026-02-24]
-        print("\n" + "═"*60)
-        print(f"🛡️ [AEGIS 2.0 동적 전략 리포트 - 지표 {total_count}종]")
-        print("═"*60)
-        print(report_content)
-        print("═"*60)
+        # 3단계: 자가 발전 (오늘 예측한 단기 저점/고점을 저장하여 내일 검증)
+        new_memory = {
+            "date": datetime.now().strftime('%Y-%m-%d'),
+            "target_predictions": report[:400].replace("\n", " "), # 예측 타점 요약 저장
+            "reflection": "다음 실행 시 실제 가격과 비교하여 예측 정확도를 평가할 것."
+        }
+        memory.append(new_memory)
+        with open(memory_file, "w", encoding="utf-8") as f:
+            json.dump(memory, f, ensure_ascii=False, indent=4)
 
-        filename = f"AEGIS_Report_{datetime.now().strftime('%Y%m%d_%H%M')}.txt"
+        # 4단계: 결과 출력 및 보고서 저장
+        filename = f"AEGIS_Target_Report_{datetime.now().strftime('%Y%m%d_%H%M')}.txt"
         with open(filename, "w", encoding="utf-8") as f:
-            f.write(f"🛡️ AEGIS DYNAMIC REPORT - {datetime.now()}\n")
-            f.write(f"Indicators Tracked: {total_count}\n")
+            f.write(f"🛡️ AEGIS 타점 정밀 분석 리포트 ({datetime.now()})\n")
             f.write("="*60 + "\n")
-            f.write(report_content)
+            f.write(report)
             f.write("\n" + "="*60 + "\n")
-            f.write("System: MacBook Pro M5 | Processor: Gemini 2.5 Flash")
+            f.write("System: MacBook Pro M5 | Mode: Target Prediction & Self-Evolution")
 
-        print(f"\n✅ 작전 완료: {total_count}개 지표가 반영된 리포트가 '{filename}'으로 저장되었습니다.")
+        print("\n" + "═"*60 + "\n" + report + "\n" + "═"*60)
+        print(f"✅ [4단계 완료] 타점 분석 리포트 '{filename}' 저장 및 자가 발전 메모리 업데이트 완료.")
 
     except Exception as e:
-        print(f"❌ AI 분석 중 치명적 오류: {e}")
+        print(f"❌ AI 분석 실패: {e}")
 
 if __name__ == "__main__":
-    run_integrated_strategy()
+    run_target_prediction_strategy()
