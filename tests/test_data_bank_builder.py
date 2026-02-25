@@ -39,7 +39,7 @@ from data_bank_builder import AegisM5ResearchCenter, main
 def research_center():
     with patch("google.oauth2.service_account.Credentials.from_service_account_file"), \
          patch("gspread.authorize"), \
-         patch("os.path.exists", return_value=True):
+         patch("os.path.isfile", return_value=True):
         return AegisM5ResearchCenter("TestSheet", "fake_key.json")
 
 # --- TESTS ---
@@ -166,13 +166,21 @@ def test_main_missing_creds_path():
 
 def test_main_creds_file_not_found():
     with patch("os.getenv", return_value="fake_path.json"), \
-         patch("os.path.exists", return_value=False):
-        with pytest.raises(FileNotFoundError, match="Service account key file not found"):
+         patch("os.path.isfile", return_value=False):
+        with pytest.raises(FileNotFoundError, match="Service account key path is not a file"):
+            main()
+
+def test_main_creds_file_permission_error():
+    with patch("os.getenv", return_value="valid_creds.json"), \
+         patch("os.path.isfile", return_value=True), \
+         patch("os.access", return_value=False):
+        with pytest.raises(PermissionError, match="Service account key file is not readable"):
             main()
 
 def test_main_success():
     with patch("os.getenv", return_value="valid_creds.json"), \
-         patch("os.path.exists", return_value=True), \
+         patch("os.path.isfile", return_value=True), \
+         patch("os.access", return_value=True), \
          patch("data_bank_builder.AegisM5ResearchCenter") as MockClass:
 
         mock_instance = MockClass.return_value
