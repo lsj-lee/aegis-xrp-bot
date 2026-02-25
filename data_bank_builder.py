@@ -88,5 +88,9 @@ if __name__ == "__main__":
     creds_path = os.getenv("GCP_CREDS_PATH")
     if not creds_path:
         raise ValueError("GCP_CREDS_PATH environment variable not set. Please set it in .env or environment.")
+
+    if not os.path.exists(creds_path):
+        raise FileNotFoundError(f"Service account key file not found at: {creds_path}")
+
     collector = AegisM5ResearchCenter("AEGIS_Daily_Report", creds_path)
     collector.collect_and_relay()
