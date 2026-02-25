@@ -1,10 +1,4 @@
-# 기밀 데이터 (절대 업로드 금지) [cite: 2026-02-11]
+creds*.json
+*.json
 .env
-gcp_creds.json
-collected_data.json
-AEGIS_Report_*.txt
-
-# 시스템 및 가상환경
-.venv/
-__pycache__/
-.DS_Storecreds xrp coin.json
+*.txt

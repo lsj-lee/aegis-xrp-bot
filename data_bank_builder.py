@@ -1,3 +1,4 @@
+# [전체 덮어쓰기 권장]
 import gspread
 from google.oauth2.service_account import Credentials
 import json
@@ -12,12 +13,23 @@ from sklearn.ensemble import RandomForestRegressor
 load_dotenv()
 
 class AegisM5ResearchCenter:
-    def __init__(self, sheet_name, key_file):
+    def __init__(self, sheet_name):
         scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
-        creds = Credentials.from_service_account_file(key_file, scopes=scopes)
+        
+        # 💡 따옴표 등을 제거하고 깨끗한 경로 문자열을 가져옵니다.
+        key_file = os.getenv("GCP_CREDS_PATH", "creds xrp coin.json").strip('"').strip("'")
+        
+        # 현재 실행 위치(cwd)를 기준으로 절대 경로 확인
+        abs_key_path = os.path.abspath(key_file)
+        
+        if not os.path.exists(abs_key_path):
+            raise ValueError(f"❌ 인증 열쇠 파일을 찾을 수 없습니다.\n확인된 경로: {abs_key_path}\n현재 폴더 파일 목록: {os.listdir('.')}")
+            
+        creds = Credentials.from_service_account_file(abs_key_path, scopes=scopes)
         self.client = gspread.authorize(creds)
         self.sheet_name = sheet_name
 
+    # ... (이후 clean_df, get_upbit_price 등 기존 로직과 동일) ...
     def clean_df(self, df):
         if isinstance(df.columns, pd.MultiIndex):
             df.columns = df.columns.get_level_values(0)
@@ -31,48 +43,36 @@ class AegisM5ResearchCenter:
         except: return "N/A"
 
     def run_m5_machine_learning(self, df):
-        """맥북 M5 뉴럴 엔진 활용: 예측가 및 분석 사유 생성 [cite: 2026-02-11]"""
         try:
             ml_df = df[['Close']].copy()
             ml_df['Lag1'] = ml_df['Close'].shift(1)
             ml_df['Lag2'] = ml_df['Close'].shift(2)
             ml_df = ml_df.dropna()
-            
             X = ml_df[['Lag1', 'Lag2']]
             y = ml_df['Close']
-            
             model = RandomForestRegressor(n_estimators=100, random_state=42)
             model.fit(X, y)
-            
             latest_price = df['Close'].iloc[-1]
             latest_data = pd.DataFrame({'Lag1': [latest_price], 'Lag2': [df['Close'].iloc[-2]]})
             prediction = round(float(model.predict(latest_data)[0]), 4)
-            
-            # 💡 M5의 분석 사유 생성 로직
             trend = "상승 에너지 우세" if prediction > latest_price else "하락 압력 우세"
-            reason = f"과거 3일간의 변동성 패턴 분석 결과 {trend} 구간 진입으로 판단됨"
-            
+            reason = f"과거 3일 패턴 분석 결과 {trend} 구간 진입으로 판단됨"
             return prediction, reason
         except: return 0, "분석 불가"
 
     def collect_and_relay(self):
-        print("🚀 [연구소] 맥북 M5 머신러닝 및 상세 사유 릴레이 가동...")
-        
+        print("🚀 [연구소] 맥북 M5 머신러닝 데이터 릴레이 가동...")
         xrp_df = self.clean_df(yf.download("XRP-USD", period="max", progress=False))
         btc_df = self.clean_df(yf.download("BTC-USD", period="max", progress=False))
-        
         xrp_upbit = self.get_upbit_price("KRW-XRP")
         btc_upbit = self.get_upbit_price("KRW-BTC")
-
         xrp_pred, xrp_reason = self.run_m5_machine_learning(xrp_df)
         btc_pred, btc_reason = self.run_m5_machine_learning(btc_df)
 
         try:
             spreadsheet = self.client.open(self.sheet_name)
-            try:
-                storage_sheet = spreadsheet.worksheet("AEGIS_ML_Storage")
-            except:
-                storage_sheet = spreadsheet.add_worksheet(title="AEGIS_ML_Storage", rows="10", cols="6")
+            try: storage_sheet = spreadsheet.worksheet("AEGIS_ML_Storage")
+            except: storage_sheet = spreadsheet.add_worksheet(title="AEGIS_ML_Storage", rows="10", cols="6")
             
             storage_sheet.clear()
             storage_sheet.update(range_name="A1", values=[
@@ -80,20 +80,10 @@ class AegisM5ResearchCenter:
                 ["XRP", xrp_upbit, xrp_pred, xrp_reason, pd.Timestamp.now().strftime('%Y-%m-%d %H:%M')],
                 ["BTC", btc_upbit, btc_pred, btc_reason, pd.Timestamp.now().strftime('%Y-%m-%d %H:%M')]
             ])
-            print(f"✅ 맥북 작전 완료: 분석 근거({xrp_reason})를 시트에 송신했습니다.")
+            print(f"✅ 맥북 작전 완료: ML 결과($ {xrp_pred})를 구글 시트에 송신했습니다.")
         except Exception as e:
             print(f"❌ 데이터 릴레이 실패: {e}")
 
-def main():
-    creds_path = os.getenv("GCP_CREDS_PATH")
-    if not creds_path:
-        raise ValueError("GCP_CREDS_PATH environment variable not set. Please set it in .env or environment.")
-
-    if not os.path.exists(creds_path):
-        raise FileNotFoundError(f"Service account key file not found at: {creds_path}")
-
-    collector = AegisM5ResearchCenter("AEGIS_Daily_Report", creds_path)
-    collector.collect_and_relay()
-
 if __name__ == "__main__":
-    main()
+    collector = AegisM5ResearchCenter("AEGIS_Daily_Report")
+    collector.collect_and_relay()
