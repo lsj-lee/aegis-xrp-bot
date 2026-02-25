@@ -85,6 +85,8 @@ class AegisM5ResearchCenter:
             print(f"❌ 데이터 릴레이 실패: {e}")
 
 if __name__ == "__main__":
-    creds_path = os.getenv("GCP_CREDS_PATH", "creds xrp coin.json")
+    creds_path = os.getenv("GCP_CREDS_PATH")
+    if not creds_path:
+        raise ValueError("GCP_CREDS_PATH environment variable not set. Please set it in .env or environment.")
     collector = AegisM5ResearchCenter("AEGIS_Daily_Report", creds_path)
     collector.collect_and_relay()
