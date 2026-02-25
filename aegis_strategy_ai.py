@@ -24,7 +24,8 @@ def run_target_prediction_strategy():
     strategy_worksheet = spreadsheet.worksheet("AEGIS_Daily_Report")
     
     # 1. 데이터 로드
-    rows = strategy_worksheet.get_all_values()[1:]
+    all_values = strategy_worksheet.get_all_values()
+    rows = all_values[1:]
     payload = [{"지표": r[0], "의미": r[1] if len(r)>1 else ""} for r in rows if r[0]]
     
     storage_sheet = spreadsheet.worksheet("AEGIS_ML_Storage")
@@ -68,7 +69,10 @@ def run_target_prediction_strategy():
         if "[시트 기록용]" in report:
             suggestion = report.split("[시트 기록용]")[1].split("\n")[0].strip()
             tag = f"AI_자율기록_{datetime.now().strftime('%m%d')}"
-            if tag not in strategy_worksheet.col_values(1):
+
+            # Optimization: Use already loaded data instead of making a new API call
+            existing_tags = [r[0] for r in all_values if r]
+            if tag not in existing_tags:
                 strategy_worksheet.append_row([tag, suggestion])
 
         # 🚀 리포트 결과 기록
