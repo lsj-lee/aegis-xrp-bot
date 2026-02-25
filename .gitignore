@@ -1,6 +1,6 @@
 # 기밀 데이터 (절대 업로드 금지) [cite: 2026-02-11]
 .env
-creds xrp coin.json
+gcp_creds.json
 collected_data.json
 AEGIS_Report_*.txt
 
