@@ -1,0 +1,8 @@
+gspread==6.1.2
+google-auth==2.38.0
+yfinance==0.2.52
+pandas==2.2.3
+numpy==2.2.2
+requests==2.32.3
+python-dotenv==1.0.1
+scikit-learn==1.6.1
