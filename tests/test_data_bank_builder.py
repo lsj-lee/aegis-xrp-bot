@@ -14,14 +14,18 @@ def setup_mock_environment():
             mock = MagicMock()
             sys.modules[module_name] = mock
 
-            if module_name == "pandas":
-                class MockMultiIndex:
-                    def get_level_values(self, level): pass
-                mock.MultiIndex = MockMultiIndex
-                mock.Timestamp.now.return_value.strftime.return_value = "2026-02-24 12:00"
-            if module_name == "sklearn.ensemble":
-                # Ensure it's a class-like mock
-                mock.RandomForestRegressor = MagicMock
+    if "pandas" in sys.modules:
+        mock = sys.modules["pandas"]
+        # Ensure MultiIndex is a class, not a Mock object
+        class MockMultiIndex:
+            def get_level_values(self, level): pass
+        mock.MultiIndex = MockMultiIndex
+        mock.Timestamp.now.return_value.strftime.return_value = "2026-02-24 12:00"
+
+    if "sklearn.ensemble" in sys.modules:
+        mock = sys.modules["sklearn.ensemble"]
+        # Ensure it's a class-like mock
+        mock.RandomForestRegressor = MagicMock
 
 setup_mock_environment()
 
