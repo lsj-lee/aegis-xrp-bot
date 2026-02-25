@@ -84,7 +84,7 @@ class AegisM5ResearchCenter:
         except Exception as e:
             print(f"❌ 데이터 릴레이 실패: {e}")
 
-if __name__ == "__main__":
+def main():
     creds_path = os.getenv("GCP_CREDS_PATH")
     if not creds_path:
         raise ValueError("GCP_CREDS_PATH environment variable not set. Please set it in .env or environment.")
@@ -94,3 +94,6 @@ if __name__ == "__main__":
 
     collector = AegisM5ResearchCenter("AEGIS_Daily_Report", creds_path)
     collector.collect_and_relay()
+
+if __name__ == "__main__":
+    main()

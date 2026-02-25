@@ -1,6 +1,7 @@
 import sys
 from unittest.mock import MagicMock, patch, ANY
 import pytest
+import os
 
 # --- ENVIRONMENT SHIM ---
 def setup_mock_environment():
@@ -30,7 +31,7 @@ def setup_mock_environment():
 setup_mock_environment()
 
 # --- TARGET IMPORT ---
-from data_bank_builder import AegisM5ResearchCenter
+from data_bank_builder import AegisM5ResearchCenter, main
 
 # --- FIXTURES ---
 
@@ -154,3 +155,28 @@ def test_collect_and_relay_sheet_creation(research_center):
         research_center.collect_and_relay()
 
         mock_spreadsheet.add_worksheet.assert_called_with(title="AEGIS_ML_Storage", rows="10", cols="6")
+
+# --- SECURITY TESTS ---
+
+def test_main_missing_creds_path():
+    with patch("os.getenv", return_value=None):
+        with pytest.raises(ValueError, match="GCP_CREDS_PATH environment variable not set"):
+            main()
+
+def test_main_creds_file_not_found():
+    with patch("os.getenv", return_value="fake_path.json"), \
+         patch("os.path.exists", return_value=False):
+        with pytest.raises(FileNotFoundError, match="Service account key file not found"):
+            main()
+
+def test_main_success():
+    with patch("os.getenv", return_value="valid_creds.json"), \
+         patch("os.path.exists", return_value=True), \
+         patch("data_bank_builder.AegisM5ResearchCenter") as MockClass:
+
+        mock_instance = MockClass.return_value
+
+        main()
+
+        MockClass.assert_called_once_with("AEGIS_Daily_Report", "valid_creds.json")
+        mock_instance.collect_and_relay.assert_called_once()
