@@ -38,7 +38,8 @@ from data_bank_builder import AegisM5ResearchCenter, main
 @pytest.fixture
 def research_center():
     with patch("google.oauth2.service_account.Credentials.from_service_account_file"), \
-         patch("gspread.authorize"):
+         patch("gspread.authorize"), \
+         patch("os.path.exists", return_value=True):
         return AegisM5ResearchCenter("TestSheet", "fake_key.json")
 
 # --- TESTS ---

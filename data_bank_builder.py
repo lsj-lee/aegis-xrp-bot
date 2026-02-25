@@ -13,11 +13,11 @@ from sklearn.ensemble import RandomForestRegressor
 load_dotenv()
 
 class AegisM5ResearchCenter:
-    def __init__(self, sheet_name):
+    def __init__(self, sheet_name, key_file_path):
         scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
         
         # 💡 따옴표 등을 제거하고 깨끗한 경로 문자열을 가져옵니다.
-        key_file = os.getenv("GCP_CREDS_PATH", "creds xrp coin.json").strip('"').strip("'")
+        key_file = key_file_path.strip('"').strip("'")
         
         # 현재 실행 위치(cwd)를 기준으로 절대 경로 확인
         abs_key_path = os.path.abspath(key_file)
@@ -84,6 +84,19 @@ class AegisM5ResearchCenter:
         except Exception as e:
             print(f"❌ 데이터 릴레이 실패: {e}")
 
-if __name__ == "__main__":
-    collector = AegisM5ResearchCenter("AEGIS_Daily_Report")
+def main():
+    creds_path = os.getenv("GCP_CREDS_PATH")
+    if not creds_path:
+        raise ValueError("GCP_CREDS_PATH environment variable not set")
+
+    # 💡 따옴표 등을 제거하고 깨끗한 경로 문자열을 가져옵니다.
+    creds_path = creds_path.strip('"').strip("'")
+
+    if not os.path.exists(creds_path):
+        raise FileNotFoundError(f"Service account key file not found: {creds_path}")
+
+    collector = AegisM5ResearchCenter("AEGIS_Daily_Report", creds_path)
     collector.collect_and_relay()
+
+if __name__ == "__main__":
+    main()
