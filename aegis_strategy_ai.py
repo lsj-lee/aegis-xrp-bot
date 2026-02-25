@@ -12,10 +12,10 @@ def run_target_prediction_strategy():
     print("🧠 [본부] AEGIS 7.0 고도화된 저점/고점 분석 엔진 가동...")
     
     scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
-    creds_path = os.getenv("GCP_CREDS_PATH", "creds xrp coin.json")
+    creds_path = os.getenv("GCP_CREDS_PATH")
     
     if not creds_path or not os.path.exists(creds_path):
-        print("❌ 인증 파일 누락")
+        print("❌ 인증 파일 누락: GCP_CREDS_PATH 환경변수가 설정되지 않았거나 파일이 존재하지 않습니다.")
         return
 
     creds = Credentials.from_service_account_file(creds_path, scopes=scopes)
