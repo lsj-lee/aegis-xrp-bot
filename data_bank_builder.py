@@ -85,5 +85,6 @@ class AegisM5ResearchCenter:
             print(f"❌ 데이터 릴레이 실패: {e}")
 
 if __name__ == "__main__":
-    collector = AegisM5ResearchCenter("AEGIS_Daily_Report", "creds xrp coin.json")
+    creds_path = os.getenv("GCP_CREDS_PATH", "creds xrp coin.json")
+    collector = AegisM5ResearchCenter("AEGIS_Daily_Report", creds_path)
     collector.collect_and_relay()
