@@ -15,6 +15,12 @@ def setup_mock_environment():
             mock = MagicMock()
             sys.modules[module_name] = mock
 
+    if "gspread" in sys.modules:
+        mock_gspread = sys.modules["gspread"]
+        # Ensure WorksheetNotFound is an Exception class
+        class MockWorksheetNotFound(Exception): pass
+        mock_gspread.exceptions.WorksheetNotFound = MockWorksheetNotFound
+
     if "pandas" in sys.modules:
         mock = sys.modules["pandas"]
         # Ensure MultiIndex is a class, not a Mock object
@@ -150,7 +156,8 @@ def test_collect_and_relay_sheet_creation(research_center):
 
         mock_spreadsheet = MagicMock()
         research_center.client.open.return_value = mock_spreadsheet
-        mock_spreadsheet.worksheet.side_effect = Exception("Not found")
+        import gspread
+        mock_spreadsheet.worksheet.side_effect = gspread.exceptions.WorksheetNotFound("Not found")
         mock_spreadsheet.add_worksheet.return_value = MagicMock()
 
         research_center.collect_and_relay()

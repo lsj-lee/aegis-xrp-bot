@@ -3,6 +3,7 @@ import gspread
 from google.oauth2.service_account import Credentials
 import json
 import os
+import re
 import yfinance as yf
 import pandas as pd
 import numpy as np
@@ -36,9 +37,13 @@ class AegisM5ResearchCenter:
         return df
 
     def get_upbit_price(self, ticker="KRW-XRP"):
+        # Validate ticker format (e.g., "KRW-BTC") to prevent injection
+        if not re.match(r"^[A-Z0-9]+-[A-Z0-9]+$", ticker):
+            return "N/A"
+
         try:
-            url = f"https://api.upbit.com/v1/ticker?markets={ticker}"
-            response = requests.get(url, timeout=5).json()
+            url = "https://api.upbit.com/v1/ticker"
+            response = requests.get(url, params={"markets": ticker}, timeout=5).json()
             return response[0]['trade_price']
         except: return "N/A"
 
