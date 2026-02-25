@@ -1,4 +1,4 @@
-gspread==6.1.2
+gspread==6.2.0
 google-auth==2.38.0
 yfinance==0.2.52
 pandas==2.2.3
