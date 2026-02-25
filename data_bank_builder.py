@@ -22,7 +22,7 @@ class AegisM5ResearchCenter:
         # 현재 실행 위치(cwd)를 기준으로 절대 경로 확인
         abs_key_path = os.path.abspath(key_file)
         
-        if not os.path.exists(abs_key_path):
+        if not os.path.isfile(abs_key_path):
             raise ValueError(f"❌ 인증 열쇠 파일을 찾을 수 없습니다.\n확인된 경로: {abs_key_path}\n현재 폴더 파일 목록: {os.listdir('.')}")
             
         creds = Credentials.from_service_account_file(abs_key_path, scopes=scopes)
@@ -92,8 +92,11 @@ def main():
     # 💡 따옴표 등을 제거하고 깨끗한 경로 문자열을 가져옵니다.
     creds_path = creds_path.strip('"').strip("'")
 
-    if not os.path.exists(creds_path):
-        raise FileNotFoundError(f"Service account key file not found: {creds_path}")
+    if not os.path.isfile(creds_path):
+        raise FileNotFoundError(f"Service account key path is not a file: {creds_path}")
+
+    if not os.access(creds_path, os.R_OK):
+        raise PermissionError(f"Service account key file is not readable: {creds_path}")
 
     collector = AegisM5ResearchCenter("AEGIS_Daily_Report", creds_path)
     collector.collect_and_relay()
