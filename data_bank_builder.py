@@ -72,7 +72,7 @@ class AegisM5ResearchCenter:
         try:
             spreadsheet = self.client.open(self.sheet_name)
             try: storage_sheet = spreadsheet.worksheet("AEGIS_ML_Storage")
-            except: storage_sheet = spreadsheet.add_worksheet(title="AEGIS_ML_Storage", rows="10", cols="6")
+            except gspread.exceptions.WorksheetNotFound: storage_sheet = spreadsheet.add_worksheet(title="AEGIS_ML_Storage", rows="10", cols="6")
             
             storage_sheet.clear()
             storage_sheet.update(range_name="A1", values=[
