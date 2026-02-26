@@ -4,3 +4,4 @@ creds*.json
 *.txt
 __pycache__/
 *.pyc
+!requirements.txt
