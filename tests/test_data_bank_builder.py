@@ -15,6 +15,12 @@ def setup_mock_environment():
             mock = MagicMock()
             sys.modules[module_name] = mock
 
+    if "requests" in sys.modules:
+        mock_req = sys.modules["requests"]
+        class MockRequestException(Exception): pass
+        mock_req.exceptions.RequestException = MockRequestException
+        mock_req.RequestException = MockRequestException
+
     if "gspread" in sys.modules:
         mock_gspread = sys.modules["gspread"]
         # Ensure WorksheetNotFound is an Exception class
@@ -76,11 +82,20 @@ def test_get_upbit_price_success(research_center):
         price = research_center.get_upbit_price("KRW-XRP")
         assert price == 1000.5
 
-def test_get_upbit_price_error(research_center):
+def test_get_upbit_price_handled_error(research_center):
+    import requests
     with patch("requests.get") as mock_get:
-        mock_get.side_effect = Exception("Error")
+        # Mocking a specific handled exception
+        mock_get.side_effect = requests.exceptions.RequestException("Connection Error")
         price = research_center.get_upbit_price("KRW-XRP")
         assert price == "N/A"
+
+def test_get_upbit_price_unhandled_error(research_center):
+    with patch("requests.get") as mock_get:
+        # Mocking an unhandled exception (e.g. RuntimeError)
+        mock_get.side_effect = RuntimeError("Unexpected Error")
+        with pytest.raises(RuntimeError):
+            research_center.get_upbit_price("KRW-XRP")
 
 def test_run_m5_machine_learning_logic(research_center):
     # Mocking a DataFrame-like object
@@ -122,7 +137,17 @@ def test_run_m5_machine_learning_logic(research_center):
         assert "하락 압력 우세" in reason
 
 def test_run_m5_machine_learning_exception(research_center):
-    pred, reason = research_center.run_m5_machine_learning(None)
+    # Passing None should raise TypeError (unhandled), ensuring bad input is not masked
+    with pytest.raises(TypeError):
+        research_center.run_m5_machine_learning(None)
+
+def test_run_m5_machine_learning_handled_exception(research_center):
+    # Mock a dataframe that raises KeyError on column access
+    class KeyErrorDF:
+        def __getitem__(self, key):
+            raise KeyError("Missing 'Close'")
+
+    pred, reason = research_center.run_m5_machine_learning(KeyErrorDF())
     assert pred == 0
     assert reason == "분석 불가"
 

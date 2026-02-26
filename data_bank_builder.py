@@ -45,7 +45,8 @@ class AegisM5ResearchCenter:
             url = "https://api.upbit.com/v1/ticker"
             response = requests.get(url, params={"markets": ticker}, timeout=5).json()
             return response[0]['trade_price']
-        except Exception: return "N/A"
+        except (requests.RequestException, ValueError, KeyError, IndexError):
+            return "N/A"
 
     def run_m5_machine_learning(self, df):
         try:
@@ -63,7 +64,8 @@ class AegisM5ResearchCenter:
             trend = "상승 에너지 우세" if prediction > latest_price else "하락 압력 우세"
             reason = f"과거 3일 패턴 분석 결과 {trend} 구간 진입으로 판단됨"
             return prediction, reason
-        except Exception: return 0, "분석 불가"
+        except (ValueError, KeyError, IndexError):
+            return 0, "분석 불가"
 
     def collect_and_relay(self):
         print("🚀 [연구소] 맥북 M5 머신러닝 데이터 릴레이 가동...")
@@ -76,8 +78,10 @@ class AegisM5ResearchCenter:
 
         try:
             spreadsheet = self.client.open(self.sheet_name)
-            try: storage_sheet = spreadsheet.worksheet("AEGIS_ML_Storage")
-            except gspread.exceptions.WorksheetNotFound: storage_sheet = spreadsheet.add_worksheet(title="AEGIS_ML_Storage", rows="10", cols="6")
+            try:
+                storage_sheet = spreadsheet.worksheet("AEGIS_ML_Storage")
+            except gspread.exceptions.WorksheetNotFound:
+                storage_sheet = spreadsheet.add_worksheet(title="AEGIS_ML_Storage", rows="10", cols="6")
             
             storage_sheet.clear()
             storage_sheet.update(range_name="A1", values=[
