@@ -80,7 +80,7 @@ class AegisM5ResearchCenter:
             spreadsheet = self.client.open(self.sheet_name)
             try:
                 storage_sheet = spreadsheet.worksheet("AEGIS_ML_Storage")
-            except gspread.exceptions.WorksheetNotFound:  # Explicitly catch only when worksheet is missing
+            except gspread.exceptions.WorksheetNotFound:  # Security Fix: Explicitly catch only gspread.exceptions.WorksheetNotFound to avoid masking other errors.
                 storage_sheet = spreadsheet.add_worksheet(title="AEGIS_ML_Storage", rows="10", cols="6")
             
             storage_sheet.clear()
