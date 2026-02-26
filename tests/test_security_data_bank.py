@@ -50,7 +50,7 @@ class TestTickerInjection(unittest.TestCase):
         self.patcher_auth.stop()
         self.patcher_isfile.stop()
 
-    @patch("requests.get")
+    @patch("data_bank_builder.requests.get")
     def test_get_upbit_price_secure_behavior(self, mock_get):
         # Setup mock response
         mock_response = MagicMock()
