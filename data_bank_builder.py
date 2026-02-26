@@ -90,7 +90,7 @@ class AegisM5ResearchCenter:
                 ["BTC", btc_upbit, btc_pred, btc_reason, pd.Timestamp.now().strftime('%Y-%m-%d %H:%M')]
             ])
             print(f"✅ 맥북 작전 완료: ML 결과($ {xrp_pred})를 구글 시트에 송신했습니다.")
-        except Exception as e:
+        except (gspread.exceptions.APIError, gspread.exceptions.SpreadsheetNotFound, gspread.exceptions.WorksheetNotFound) as e:
             print(f"❌ 데이터 릴레이 실패: {e}")
 
 def main():
