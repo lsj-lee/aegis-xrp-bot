@@ -21,7 +21,12 @@ def run_light_test():
     print("-" * 60)
 
     # 1. 환경 변수 및 열쇠 경로 확보
-    key_path = os.getenv("GCP_CREDS_PATH", "creds xrp coin.json").strip('"').strip("'")
+    key_path = os.getenv("GCP_CREDS_PATH")
+    if not key_path:
+        print("❌ GCP_CREDS_PATH 환경 변수가 설정되지 않았습니다.")
+        return
+
+    key_path = key_path.strip('"').strip("'")
     sheet_name = "TEST_SHEET"
     
     print(f"📡 설정 확인: [Key] {key_path} / [Sheet] {sheet_name}")

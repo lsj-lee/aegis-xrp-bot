@@ -1,5 +1,5 @@
-# [전체 덮어쓰기 권장]
 import gspread
+import sys
 from google.oauth2.service_account import Credentials
 import json
 import os
@@ -90,9 +90,10 @@ class AegisM5ResearchCenter:
             print(f"❌ 데이터 릴레이 실패: {e}")
 
 def main():
+    # Security: Use environment variable instead of hardcoded path
     creds_path = os.getenv("GCP_CREDS_PATH")
     if not creds_path:
-        raise ValueError("GCP_CREDS_PATH environment variable not set")
+        raise ValueError("❌ Error: GCP_CREDS_PATH environment variable not set.")
 
     # 💡 따옴표 등을 제거하고 깨끗한 경로 문자열을 가져옵니다.
     creds_path = creds_path.strip('"').strip("'")
@@ -107,4 +108,8 @@ def main():
     collector.collect_and_relay()
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as e:
+        print(f"❌ {e}")
+        sys.exit(1)
