@@ -93,7 +93,7 @@ def main():
     # Security: Use environment variable instead of hardcoded path
     creds_path = os.getenv("GCP_CREDS_PATH")
     if not creds_path:
-        raise ValueError("❌ Error: GCP_CREDS_PATH environment variable not set.")
+        raise ValueError("GCP_CREDS_PATH environment variable not set. Please ensure it is configured in your environment or .env file.")
 
     # 💡 따옴표 등을 제거하고 깨끗한 경로 문자열을 가져옵니다.
     creds_path = creds_path.strip('"').strip("'")
