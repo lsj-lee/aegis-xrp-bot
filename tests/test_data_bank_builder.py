@@ -23,9 +23,14 @@ def setup_mock_environment():
 
     if "gspread" in sys.modules:
         mock_gspread = sys.modules["gspread"]
-        # Ensure WorksheetNotFound is an Exception class
+        # Ensure Exceptions are classes
         class MockWorksheetNotFound(Exception): pass
+        class MockAPIError(Exception): pass
+        class MockSpreadsheetNotFound(Exception): pass
+
         mock_gspread.exceptions.WorksheetNotFound = MockWorksheetNotFound
+        mock_gspread.exceptions.APIError = MockAPIError
+        mock_gspread.exceptions.SpreadsheetNotFound = MockSpreadsheetNotFound
 
     if "pandas" in sys.modules:
         mock = sys.modules["pandas"]
@@ -74,7 +79,7 @@ def test_clean_df_singleindex(research_center):
     assert cleaned_df.columns == ["Col1", "Col2"]
 
 def test_get_upbit_price_success(research_center):
-    with patch("requests.get") as mock_get:
+    with patch("data_bank_builder.requests.get") as mock_get:
         mock_response = MagicMock()
         mock_response.json.return_value = [{'trade_price': 1000.5}]
         mock_get.return_value = mock_response
@@ -83,15 +88,16 @@ def test_get_upbit_price_success(research_center):
         assert price == 1000.5
 
 def test_get_upbit_price_handled_error(research_center):
-    import requests
-    with patch("requests.get") as mock_get:
+    # We need to use the exception class from the mocked module
+    from data_bank_builder import requests
+    with patch("data_bank_builder.requests.get") as mock_get:
         # Mocking a specific handled exception
         mock_get.side_effect = requests.exceptions.RequestException("Connection Error")
         price = research_center.get_upbit_price("KRW-XRP")
         assert price == "N/A"
 
 def test_get_upbit_price_unhandled_error(research_center):
-    with patch("requests.get") as mock_get:
+    with patch("data_bank_builder.requests.get") as mock_get:
         # Mocking an unhandled exception (e.g. RuntimeError)
         mock_get.side_effect = RuntimeError("Unexpected Error")
         with pytest.raises(RuntimeError):
@@ -193,7 +199,7 @@ def test_collect_and_relay_sheet_creation(research_center):
 
 def test_main_missing_creds_path():
     with patch("os.getenv", return_value=None):
-        with pytest.raises(ValueError, match="GCP_CREDS_PATH environment variable not set"):
+        with pytest.raises(ValueError, match="Critical Security Error: GCP_CREDS_PATH environment variable is not set"):
             main()
 
 def test_main_creds_file_not_found():
