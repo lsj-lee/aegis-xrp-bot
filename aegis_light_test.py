@@ -23,6 +23,9 @@ def run_light_test():
     # 1. 환경 변수 및 열쇠 경로 확보
     key_path = os.getenv("GCP_CREDS_PATH")
     if not key_path:
+        print("❌ GCP_CREDS_PATH 환경 변수가 설정되지 않았습니다.")
+        return
+
         print("❌ [오류] GCP_CREDS_PATH 환경 변수가 설정되지 않았습니다.")
         return
     key_path = key_path.strip('"').strip("'")
