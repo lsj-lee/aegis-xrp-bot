@@ -47,6 +47,22 @@ def test_run_target_prediction_strategy_missing_file():
         # Verify that it printed the error message
         mock_print.assert_any_call("❌ 인증 파일 누락: GCP_CREDS_PATH 환경변수가 설정되지 않았거나 파일이 존재하지 않습니다.")
 
+def test_run_target_prediction_strategy_missing_gemini_key():
+    """Test that the function handles missing GEMINI_API_KEY gracefully."""
+    fake_creds_path = "fake_creds.json"
+
+    # Environment has GCP_CREDS_PATH but NO GEMINI_API_KEY
+    env_vars = {"GCP_CREDS_PATH": fake_creds_path}
+
+    with patch.dict(os.environ, env_vars, clear=True), \
+         patch('os.path.exists', return_value=True), \
+         patch('builtins.print') as mock_print:
+
+        aegis_strategy_ai.run_target_prediction_strategy()
+
+        # Verify that it printed the error message
+        mock_print.assert_any_call("❌ 인증 실패: GEMINI_API_KEY 환경변수가 설정되지 않았습니다.")
+
 def test_run_target_prediction_strategy_success_flow():
     """Test the success flow to ensure we haven't broken the main logic (mocked)."""
     fake_creds_path = "fake_creds.json"
