@@ -71,7 +71,9 @@ def run_target_prediction_strategy():
             tag = f"AI_자율기록_{datetime.now().strftime('%m%d')}"
 
             # Optimization: Use already loaded data instead of making a new API call
-            existing_tags = [r[0] for r in all_values if r]
+            # Use set for O(1) lookup
+            existing_tags = {r[0] for r in rows if r}
+
             if tag not in existing_tags:
                 strategy_worksheet.append_row([tag, suggestion])
 
