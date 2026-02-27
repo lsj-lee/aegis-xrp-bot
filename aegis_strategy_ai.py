@@ -18,6 +18,10 @@ def run_target_prediction_strategy():
         print("❌ 인증 파일 누락: GCP_CREDS_PATH 환경변수가 설정되지 않았거나 파일이 존재하지 않습니다.")
         return
 
+    if not os.getenv("GEMINI_API_KEY"):
+        print("❌ 인증 실패: GEMINI_API_KEY 환경변수가 설정되지 않았습니다.")
+        return
+
     creds = Credentials.from_service_account_file(creds_path, scopes=scopes)
     gc = gspread.authorize(creds)
     spreadsheet = gc.open("AEGIS_Daily_Report")
