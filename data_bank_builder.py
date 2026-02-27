@@ -37,8 +37,8 @@ class AegisM5ResearchCenter:
         return df
 
     def get_upbit_price(self, ticker="KRW-XRP"):
-        # Validate ticker format (e.g., "KRW-BTC") to prevent injection
-        if not re.match(r"^[A-Z0-9]+-[A-Z0-9]+$", ticker):
+        # Validate ticker type and format (e.g., "KRW-BTC") to prevent injection and errors
+        if not isinstance(ticker, str) or not re.match(r"^[A-Z0-9]+-[A-Z0-9]+$", ticker):
             return "N/A"
 
         try:
