@@ -24,22 +24,23 @@ def run_operation(step_name, command):
     return True
 
 def main():
-    print(f"🛡️ AEGIS 통합 지휘 시스템 실전 테스트 (시작 시간: {datetime.now().strftime('%H:%M:%S')})")
+    print(f"🛡️ AEGIS 가변형 통합 지휘 시스템 실전 테스트 (시작 시간: {datetime.now().strftime('%H:%M:%S')})")
     
-    if not run_operation("[1단계: M5 연산 기지 가동]", "python3 data_bank_builder.py"):
+    # 💡 정찰 스캐너(aegis_model_scanner.py)는 깃허브 액션이 주 1회 자동으로 돌려주므로 로컬 테스트에서 제외되었습니다.
+    
+    if not run_operation("[1단계: M5 연산 기지 가동 (데이터 수집)]", "python3 data_bank_builder.py"):
         print("🛑 1단계 오류로 인해 작전을 중단합니다.")
         return
 
     print("\n" + "📡 데이터 릴레이 대기 중 (3초)...")
     time.sleep(3)
 
-    if not run_operation("[2단계: 클라우드 AI 본부 가동]", "python3 aegis_strategy_ai.py"):
+    if not run_operation("[2단계: 클라우드 AI 본부 가동 (전략 분석)]", "python3 aegis_strategy_ai.py"):
         print("🛑 2단계 오류로 인해 작전을 중단합니다.")
         return
 
-    print("\n" + "🏆" + "="*50)
-    print("🎖️ 전면 실전 테스트 완료!")
-    print("구글 시트를 확인하십시오.")
+    print("\n" + "="*50)
+    print("🎉 [모든 작전 완료] M5 로컬 연산과 클라우드 AI 전략 분석이 완벽하게 가동되었습니다!")
     print("="*50)
 
 if __name__ == "__main__":

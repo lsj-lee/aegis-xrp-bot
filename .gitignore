@@ -1,6 +1,12 @@
+# 보안 및 개인정보 파일 차단
+.env
 creds*.json
 *.json
-.env
-*.txt
+
+# 가상환경 및 로컬 데이터 차단
+.venv/
 __pycache__/
-*.pyc
+aegis_data/
+
+# 테스트 리포트 파일 차단 (선택 사항)
+*.txt
