@@ -1,0 +1,54 @@
+name: AEGIS Daily Collector Auto-Run
+
+on:
+  # 매일 한국 시간 오전 9시 (UTC 0시)에 자동 실행
+  schedule:
+    - cron: '0 0 * * *' 
+  
+  # GitHub 웹사이트에서 수동으로 버튼을 눌러 실행할 수 있는 옵션
+  workflow_dispatch: 
+
+jobs:
+  run-collector:
+    runs-on: ubuntu-latest
+    
+    steps:
+    # 1. 깃허브 저장소의 코드를 서버로 불러옵니다.
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+
+    # 2. 파이썬 환경을 세팅합니다.
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11' # 안정적인 호환성을 위한 버전
+
+    # 3. 필요한 라이브러리를 설치합니다.
+    - name: Install Dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    # 4. 깃허브 보안 비밀고(Secrets)에서 인증키를 가져와 파일을 생성합니다.
+    - name: Create GCP Credentials JSON
+      env:
+        GCP_CREDENTIALS_JSON: ${{ secrets.GCP_CREDENTIALS_JSON }}
+      run: |
+        echo "$GCP_CREDENTIALS_JSON" > creds_xrp_coin.json
+
+    # 5. 데일리 수집기를 실행합니다.
+    - name: Run AEGIS Collector
+      env:
+        GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        GCP_CREDS_PATH: "creds_xrp_coin.json"
+      run: |
+        python aegis_collector.py
+
+    # 6. 수집되어 변경된 JSON 데이터를 깃허브에 다시 저장(Commit & Push)합니다.
+    - name: Commit and Push Updated Data
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add aegis_data/
+        git commit -m "Auto-update: AEGIS Daily Collector Data 병합 완료" || echo "변경된 데이터가 없습니다."
+        git push

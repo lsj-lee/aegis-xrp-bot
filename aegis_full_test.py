@@ -1,47 +1,64 @@
-import os
 import subprocess
 import time
 from datetime import datetime
+import os
+import sys
 
-def run_operation(step_name, command):
-    print(f"\n" + "="*50)
-    print(f"🚀 {step_name} 개시...")
-    print("="*50)
-    
-    start_time = time.time()
-    result = subprocess.run(command, shell=True, capture_output=True, text=True)
-    
-    if result.returncode == 0:
-        print(f"✅ {step_name} 성공!")
-        print(result.stdout)
-    else:
-        print(f"❌ {step_name} 실패!")
-        print(result.stderr)
+# 💾 파일 제목: aegis_full_test.py (마스터 관제탑 - 가상환경 최적화)
+# 🚀 사유: 1단계 수집기부터 6단계 전략 도출까지 로컬 환경에서 일괄 실행 및 가상환경(venv) 강제 적용
+
+def run_module(step_name, file_name):
+    print(f"\n▶️ [{step_name}] 작전 개시: {file_name} 가동 중...")
+    try:
+        # sys.executable을 통해 현재 실행 중인 가상환경(.venv)의 파이썬을 정확히 타겟팅합니다.
+        result = subprocess.run([sys.executable, file_name], check=True)
+        print(f"   ✅ [{step_name}] 완료.")
+        return True
+    except subprocess.CalledProcessError as e:
+        print(f"   ❌ [{step_name}] 실패! (에러 코드: {e.returncode})")
+        print(f"   🚨 치명적 오류 발생. 작전을 즉각 중단합니다.")
         return False
-        
-    duration = time.time() - start_time
-    print(f"⏱️ 소요 시간: {duration:.2f}초")
-    return True
+    except FileNotFoundError:
+        print(f"   ❌ [오류] {file_name} 파일을 찾을 수 없습니다.")
+        return False
 
 def main():
-    print(f"🛡️ AEGIS 가변형 통합 지휘 시스템 실전 테스트 (시작 시간: {datetime.now().strftime('%H:%M:%S')})")
-    
-    # 💡 정찰 스캐너(aegis_model_scanner.py)는 깃허브 액션이 주 1회 자동으로 돌려주므로 로컬 테스트에서 제외되었습니다.
-    
-    if not run_operation("[1단계: M5 연산 기지 가동 (데이터 수집)]", "python3 data_bank_builder.py"):
-        print("🛑 1단계 오류로 인해 작전을 중단합니다.")
-        return
+    start_time = datetime.now()
+    print("=" * 60)
+    print(f"🛡️ AEGIS 통합 지휘 통제소 (마스터 관제탑) 가동")
+    print(f"📅 작전 개시 일시: {start_time.strftime('%Y-%m-%d %H:%M:%S')}")
+    print("=" * 60)
 
-    print("\n" + "📡 데이터 릴레이 대기 중 (3초)...")
-    time.sleep(3)
+    # 🚀 파이프라인 실행 순서 정의 (수집기가 1단계로 포함됨)
+    pipeline = [
+        ("1단계: 다차원 데이터 수집/병합", "aegis_collector.py"),
+        ("2단계: M5 머신러닝 연산", "aegis_ml_engine.py"),
+        ("3단계: 클라우드 동기화", "aegis_syncer.py"),
+        ("4단계: 제2참모 (통찰 분석)", "aegis_agent_insight.py"),
+        ("5단계: 제3참모 (논리 분석)", "aegis_agent_logic.py"),
+        ("6단계: 수석 전략관 (최종 브리핑)", "aegis_strategy_final.py")
+    ]
 
-    if not run_operation("[2단계: 클라우드 AI 본부 가동 (전략 분석)]", "python3 aegis_strategy_ai.py"):
-        print("🛑 2단계 오류로 인해 작전을 중단합니다.")
-        return
+    for step_name, file_name in pipeline:
+        # 파일 존재 여부를 먼저 확인하여 불필요한 에러 방지
+        if not os.path.exists(file_name):
+            print(f"⚠️ [{file_name}] 파일이 현재 디렉토리에 없습니다. 작전을 중단합니다.")
+            return
+            
+        success = run_module(step_name, file_name)
+        if not success:
+            print("\n⚠️ 파이프라인 가동이 중단되었습니다. 터미널 로그를 확인하십시오.")
+            return
+        
+        # 각 모듈이 데이터를 안전하게 저장할 수 있도록 2초의 I/O 쿨다운 부여
+        time.sleep(2) 
 
-    print("\n" + "="*50)
-    print("🎉 [모든 작전 완료] M5 로컬 연산과 클라우드 AI 전략 분석이 완벽하게 가동되었습니다!")
-    print("="*50)
+    end_time = datetime.now()
+    elapsed_time = end_time - start_time
+    print("\n" + "=" * 60)
+    print(f"✨ [전 작전 성공] 모든 임무가 M5 연산 기지에서 완벽히 수행되었습니다.")
+    print(f"⏱️ 총 소요 시간: {elapsed_time}")
+    print("=" * 60)
 
 if __name__ == "__main__":
     main()
